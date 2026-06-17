@@ -144,6 +144,25 @@ private struct ServerEditor: View {
             }
 
             Section {
+                ForEach(Undernet.userModes) { mode in
+                    Toggle(isOn: Binding(
+                        get: { config.userModes.contains(mode.letter) },
+                        set: { on in
+                            if on { config.userModes.insert(mode.letter) }
+                            else { config.userModes.remove(mode.letter) }
+                        })
+                    ) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("+\(mode.letter)  ·  \(mode.name)")
+                            Text(mode.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("User Modes (set on connect)")
+            }
+
+            Section {
                 ForEach($config.onConnectCommands) { $cmd in
                     HStack(spacing: 8) {
                         TextField("/msg NickServ identify …  or  MODE %nick% +x", text: $cmd.line)

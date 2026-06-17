@@ -250,6 +250,46 @@ final class AppModel {
         return members.map(\.nick).filter { $0.lowercased().hasPrefix(token.lowercased()) }
     }
 
+    // MARK: - Channel modes (Undernet)
+
+    func networkID(of convID: String) -> String { String(convID.split(separator: "/").first ?? "") }
+
+    /// Set or clear a channel mode, sending the MODE line and tracking it locally.
+    func setChannelMode(_ letter: String, enabled: Bool, param: String? = nil, for convID: String) {
+        guard let conv = conversations[convID], conv.kind == .channel else { return }
+        let netID = networkID(of: convID)
+        let sign = enabled ? "+" : "-"
+        var line = "MODE \(conv.name) \(sign)\(letter)"
+        if let param, !param.isEmpty, enabled || letter == "k" { line += " \(param)" }
+        Task { await client.sendRaw(line, networkID: netID) }
+
+        mutateConversation(convID) {
+            if enabled {
+                $0.activeModes.insert(letter)
+                if letter == "l" { $0.modeLimit = Int(param ?? "") }
+                if letter == "k" { $0.modeKey = param }
+            } else {
+                $0.activeModes.remove(letter)
+                if letter == "l" { $0.modeLimit = nil }
+                if letter == "k" { $0.modeKey = nil }
+            }
+        }
+    }
+
+    // MARK: - X (Channel Service) settings
+
+    private static let xBot = "X@channels.undernet.org"
+
+    func sendXChannelSet(_ option: String, value: String, for convID: String) {
+        guard let conv = conversations[convID], conv.kind == .channel else { return }
+        let netID = networkID(of: convID)
+        Task { await client.sendRaw("PRIVMSG \(AppModel.xBot) :SET \(conv.name) \(option) \(value)", networkID: netID) }
+    }
+
+    func sendXUserSet(_ option: String, value: String, networkID: String) {
+        Task { await client.sendRaw("PRIVMSG \(AppModel.xBot) :USET \(option) \(value)", networkID: networkID) }
+    }
+
     // MARK: - Server configuration: persistence
 
     func config(for networkID: String) -> ServerConfig? {
@@ -346,6 +386,12 @@ final class AppModel {
         let nick = networks.first { $0.id == networkID }?.nick ?? cfg.nick
 
         Task { [weak self] in
+            // 1. User modes first (e.g. +x host masking, +w wallops).
+            if !cfg.userModes.isEmpty {
+                let modes = "+" + cfg.userModes.sorted().joined()
+                await self?.client.sendRaw("MODE \(nick) \(modes)", networkID: networkID)
+            }
+            // 2. Perform commands, in order, each after its delay.
             for cmd in cfg.onConnectCommands {
                 let raw = AppModel.rawLine(from: cmd.line, nick: nick)
                 guard !raw.isEmpty else { continue }

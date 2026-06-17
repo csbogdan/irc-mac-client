@@ -4,6 +4,8 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var channelModesOpen = false
+    @State private var xSettingsOpen = false
 
     var body: some View {
         @Bindable var model = model
@@ -24,6 +26,8 @@ struct ContentView: View {
         }
         .toolbar { toolbar }
         .sheet(isPresented: $model.quickSwitcherOpen) { QuickSwitcherView() }
+        .sheet(isPresented: $channelModesOpen) { ChannelModesView() }
+        .sheet(isPresented: $xSettingsOpen) { XChannelSettingsView() }
         .animation(.easeInOut(duration: 0.18), value: model.memberListVisible)
     }
 
@@ -46,6 +50,15 @@ struct ContentView: View {
                 Image(systemName: "magnifyingglass")
             }
             .help("Find (⌘F)")
+            if model.selectedConversation?.kind == .channel {
+                Menu {
+                    Button("Channel Modes…") { channelModesOpen = true }
+                    Button("Channel Settings (X)…") { xSettingsOpen = true }
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                }
+                .help("Channel Modes & Settings")
+            }
             Button { model.memberListVisible.toggle() } label: {
                 Image(systemName: "sidebar.right")
             }

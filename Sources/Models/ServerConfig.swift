@@ -36,6 +36,9 @@ struct ServerConfig: Identifiable, Hashable, Codable {
     var saslAccount: String = ""
     var saslPassword: String = ""
 
+    // User modes to set on this network right after connecting (e.g. "x", "w").
+    var userModes: Set<String> = []
+
     // Behaviour
     var connectOnLaunch: Bool = false
     var autoReconnect: Bool = true

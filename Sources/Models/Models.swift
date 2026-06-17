@@ -121,6 +121,12 @@ struct Conversation: Identifiable, Hashable {
     var firstUnreadID: String? = nil
     var isMuted: Bool = false
 
+    // Active channel modes (best-effort: updated optimistically on set and from
+    // MODE events on the live transport).
+    var activeModes: Set<String> = []
+    var modeLimit: Int? = nil
+    var modeKey: String? = nil
+
     var memberCount: Int { kind == .channel ? max(members.count, declaredMemberCount) : 0 }
     var declaredMemberCount: Int = 0
 
