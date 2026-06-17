@@ -60,6 +60,7 @@ actor LiveIRCClient: IRCClient {
 
     func connect(networkID: String) async {
         emit(.stateChanged(networkID: networkID, .connecting))
+        emit(.serverLine(networkID: networkID, text: "*** Connecting to \(host):\(port) (\(useTLS ? "TLS" : "plain"))…"))
 
         let params: NWParameters = useTLS ? NWParameters(tls: .init(), tcp: .init())
                                           : NWParameters(tls: nil, tcp: .init())
@@ -79,6 +80,7 @@ actor LiveIRCClient: IRCClient {
         case .ready:
             // Socket/TLS up — begin registration with CAP negotiation.
             emit(.stateChanged(networkID: networkID, .registering))
+            emit(.serverLine(networkID: networkID, text: "*** Socket ready — registering as \(nick)…"))
             if !serverPassword.isEmpty {
                 rawSend(IRCParser.serialize(command: "PASS", params: [serverPassword]))
             }

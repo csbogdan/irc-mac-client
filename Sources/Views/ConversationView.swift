@@ -15,9 +15,10 @@ struct ConversationView: View {
         VStack(spacing: 0) {
             if conv?.kind == .channel, net?.state.isLive == true { topicBar; Divider() }
 
-            if let net, net.state.isBusy {
+            // The server console always shows its log, regardless of state.
+            if conv?.kind != .server, let net, net.state.isBusy {
                 connectingState(net)
-            } else if let net, net.state == .disconnected {
+            } else if conv?.kind != .server, let net, net.state == .disconnected {
                 offlineState(net)
             } else {
                 scrollback
