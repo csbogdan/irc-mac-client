@@ -1,60 +1,84 @@
 import SwiftUI
 
+/// Member list (detail pane): grouped by Operators / Voiced / Members with
+/// presence dots, mode glyphs and a per-member context menu.
 struct MemberListView: View {
-    @Bindable var channel: ChannelModel
-    @Environment(AppModel.self) private var app
+    @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
+
+    private var conv: Conversation? { model.selectedConversation }
 
     var body: some View {
-        List {
-            Section("\(channel.members.count) members") {
-                ForEach(channel.sortedMembers) { member in
-                    MemberRow(member: member)
-                        .contextMenu {
-                            Button("Message \(member.nick)") { openDM(member) }
-                            Button("Whois \(member.nick)") {
-                                app.selectedNetwork?.send("WHOIS \(member.nick)")
-                            }
-                            Divider()
-                            Button("Op") { mode("+o", member) }
-                            Button("Voice") { mode("+v", member) }
-                            Button("Kick", role: .destructive) {
-                                app.selectedNetwork?.send("KICK \(channel.name) \(member.nick)")
-                            }
-                        }
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("MEMBERS").font(.system(size: 11, weight: .bold)).foregroundStyle(.tertiary)
+                Text("\(conv?.memberCount ?? 0) online").font(.system(size: 12.5)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14).padding(.top, 11).padding(.bottom, 8)
+            Divider()
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    group("Operators", members(.op))
+                    group("Voiced", members(.voice))
+                    group("Members", members(.regular))
                 }
+                .padding(.vertical, 6)
             }
         }
-        .listStyle(.inset)
+        .background(.regularMaterial)
     }
 
-    private func mode(_ flag: String, _ member: Member) {
-        app.selectedNetwork?.send("MODE \(channel.name) \(flag) \(member.nick)")
+    private func members(_ mode: MemberMode) -> [Member] {
+        (conv?.members ?? [])
+            .filter { $0.mode == mode }
+            .sorted { $0.nick.lowercased() < $1.nick.lowercased() }
     }
 
-    private func openDM(_ member: Member) {
-        guard let network = app.selectedNetwork else { return }
-        let dm = network.channel(named: member.nick, kind: .dm)
-        app.select(dm)
+    @ViewBuilder private func group(_ title: String, _ list: [Member]) -> some View {
+        if !list.isEmpty {
+            Text("\(title) — \(list.count)")
+                .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.tertiary)
+                .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 3)
+            ForEach(list) { m in MemberRow(member: m) }
+        }
     }
 }
 
 private struct MemberRow: View {
+    @Environment(AppModel.self) private var model
     let member: Member
 
     var body: some View {
-        HStack(spacing: 6) {
-            if let symbol = member.symbolName {
-                Image(systemName: symbol)
-                    .font(.caption)
-                    .foregroundStyle(member.prefix == .op ? Color.orange : Color.green)
-            } else {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 6))
-                    .foregroundStyle(member.isAway ? Color.secondary : Color.green)
-            }
+        HStack(spacing: 7) {
+            // Presence dot — filled when online, hollow ring when away.
+            Circle()
+                .strokeBorder(member.isAway ? Color.secondary : .clear, lineWidth: 1.5)
+                .background(Circle().fill(member.isAway ? .clear : Theme.opGreen))
+                .frame(width: 7, height: 7)
+            Text(member.mode.glyph)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(member.mode == .op ? Theme.opGreen : Theme.voiceBlue)
+                .frame(width: 9)
             Text(member.nick)
-                .foregroundStyle(member.isAway ? .secondary : .primary)
+                .font(.system(size: 12.5))
+                .fontWeight(member.nick == model.selfNick ? .semibold : .regular)
+                .foregroundStyle(member.isAway ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.secondary))
+                .italic(member.isAway)
+                .lineLimit(1)
             Spacer()
+        }
+        .padding(.horizontal, 12).padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Whois \(member.nick)") { model.whois(member.nick) }
+            Button("Message \(member.nick)") { model.openDM(member.nick) }
+            Divider()
+            Button("Give Op (+o)") { model.setMode(.op, nick: member.nick) }
+            Button("Give Voice (+v)") { model.setMode(.voice, nick: member.nick) }
+            Divider()
+            Button("Kick \(member.nick)", role: .destructive) { model.kick(member.nick) }
+            Button("Ignore \(member.nick)", role: .destructive) { }
         }
     }
 }

@@ -14,3 +14,6 @@ Package.resolved
 # User settings
 *.xcuserstate
 xcuserdata/
+
+# DerivedData / generated
+Relay.xcodeproj/

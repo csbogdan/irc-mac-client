@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<template id="__bundler_thumbnail"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="#1d1d1f"/><circle cx="34" cy="44" r="11" fill="#5aa9e6"/><circle cx="34" cy="44" r="11" fill="#5aa9e6"/><text x="50" y="74" font-family="-apple-system,sans-serif" font-size="30" font-weight="700" fill="#fff" text-anchor="middle">IRC</text></svg></template>
+<helmet>
+<style>
+*{box-sizing:border-box;}
+body{margin:0;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:12px;height:12px;}
+::-webkit-scrollbar-thumb{background:rgba(140,140,140,.45);border-radius:7px;border:3px solid transparent;background-clip:content-box;}
+::-webkit-scrollbar-thumb:hover{background:rgba(140,140,140,.7);background-clip:content-box;}
+::-webkit-scrollbar-track{background:transparent;}
+input,textarea,button{font-family:inherit;}
+@keyframes qsIn{from{opacity:0;transform:scale(.97) translateY(-8px);}to{opacity:1;transform:none;}}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+</style>
+</helmet>
+
+<div style="{{ desktopStyle }}">
+  <div style="{{ rootStyle }}">
+
+    <!-- ===== TITLE BAR (unified toolbar) ===== -->
+    <div style="height:52px; flex-shrink:0; display:flex; align-items:center; border-bottom:1px solid var(--sep); background:var(--titlebar);">
+      <div style="{{ sidebarHeadStyle }}">
+        <div style="display:flex; gap:8px; padding:0 16px 0 20px;">
+          <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12);"></span>
+          <span style="width:12px;height:12px;border-radius:50%;background:#febc2e;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12);"></span>
+          <span style="width:12px;height:12px;border-radius:50%;background:#28c840;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12);"></span>
+        </div>
+        <div style="flex:1;"></div>
+        <button onClick="{{ openQuick }}" title="Quick switcher (⌘K)" style="display:flex;align-items:center;gap:4px;height:24px;padding:0 8px;border:1px solid var(--field-border);background:var(--field);border-radius:6px;color:var(--text2);font-size:11px;cursor:default;">⌘K</button>
+        <button onClick="{{ toggleSidebar }}" title="Toggle sidebar" style="width:30px;height:26px;margin:0 8px 0 6px;display:grid;place-items:center;border:none;background:transparent;border-radius:6px;color:var(--text2);cursor:default;" style-hover="background:var(--hover);">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/><line x1="6" y1="3" x2="6" y2="13" stroke="currentColor" stroke-width="1.3"/></svg>
+        </button>
+      </div>
+
+      <!-- content toolbar -->
+      <div style="flex:1; display:flex; align-items:center; gap:11px; padding:0 14px; min-width:0;">
+        <sc-if value="{{ headerAvatar.show }}"><span style="{{ headerAvatar.style }}">{{ headerAvatar.initial }}</span></sc-if>
+        <div style="min-width:0;">
+          <div style="font-size:14.5px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.15;">{{ headerName }}</div>
+          <div style="font-size:11px; color:var(--text3); white-space:nowrap; line-height:1.2;">{{ headerSub }}</div>
+        </div>
+        <div style="flex:1;"></div>
+        <button onClick="{{ openSearch }}" title="Search (⌘F)" style="width:30px;height:26px;display:grid;place-items:center;border:none;background:transparent;border-radius:6px;color:var(--text2);cursor:default;" style-hover="background:var(--hover);">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        </button>
+        <button onClick="{{ toggleTheme }}" title="Toggle appearance" style="width:30px;height:26px;display:grid;place-items:center;border:none;background:transparent;border-radius:6px;color:var(--text2);cursor:default;font-size:15px;" style-hover="background:var(--hover);">{{ themeIcon }}</button>
+        <button onClick="{{ toggleMemberList }}" title="Toggle members" style="width:30px;height:26px;display:grid;place-items:center;border:none;background:transparent;border-radius:6px;color:var(--text2);cursor:default;" style-hover="background:var(--hover);">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/><line x1="10.5" y1="3" x2="10.5" y2="13" stroke="currentColor" stroke-width="1.3"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== BODY ===== -->
+    <div style="flex:1; display:flex; min-height:0;">
+
+      <!-- SIDEBAR -->
+      <div style="{{ sidebarStyle }}">
+        <div style="padding:8px 0 14px;">
+          <sc-for list="{{ navNetworks }}" as="net" hint-placeholder-count="3">
+            <div style="display:flex; align-items:center; padding:5px 10px 3px 6px; gap:2px;">
+              <button onClick="{{ net.toggle }}" style="width:18px;height:18px;display:grid;place-items:center;border:none;background:transparent;color:var(--text3);font-size:10px;cursor:default;border-radius:4px;">{{ net.tri }}</button>
+              <button onClick="{{ net.selectServer }}" style="{{ net.headerStyle }}" style-hover="background:var(--hover);" data-screen-label="net">
+                <span style="display:flex;align-items:center;gap:7px;flex:1;min-width:0;text-align:left;padding:3px 6px;border:none;background:transparent;border-radius:6px;">
+                  <span style="{{ net.dotStyle }}"></span>
+                  <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text2);white-space:nowrap;">{{ net.name }}</span>
+                  <sc-if value="{{ net.stateLabel }}"><span style="font-size:10px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">{{ net.stateLabel }}</span></sc-if>
+                </span>
+              </button>
+            </div>
+            <sc-if value="{{ net.expanded }}">
+              <sc-for list="{{ net.items }}" as="it" hint-placeholder-count="4">
+                <div onClick="{{ it.select }}" onContextMenu="{{ it.onCtx }}" style="{{ it.rowStyle }}" style-hover="background:var(--hover);" data-screen-label="channel">
+                  <sc-if value="{{ it.isChannel }}"><span style="{{ it.hashStyle }}">#</span></sc-if>
+                  <sc-if value="{{ it.isDm }}"><span style="{{ it.avatarStyle }}">{{ it.initial }}</span></sc-if>
+                  <span style="{{ it.nameStyle }}">{{ it.label }}</span>
+                  <sc-if value="{{ it.unread }}"><span style="{{ it.badgeStyle }}">{{ it.unreadText }}</span></sc-if>
+                </div>
+              </sc-for>
+            </sc-if>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- CONTENT -->
+      <div style="flex:1; display:flex; flex-direction:column; min-width:0; background:var(--content); position:relative;">
+
+        <!-- topic bar -->
+        <sc-if value="{{ showTopicBar }}">
+          <div style="display:flex; align-items:center; gap:12px; padding:7px 16px; border-bottom:1px solid var(--sep); min-height:40px;">
+            <sc-if value="{{ editingTopic }}">
+              <input value="{{ topicDraft }}" onChange="{{ onTopicChange }}" onKeyDown="{{ onTopicKey }}" onBlur="{{ commitTopic }}" ref="{{ topicRef }}" placeholder="Channel topic" style="flex:1;background:var(--field);border:1px solid var(--accent);border-radius:6px;padding:5px 9px;font-size:12.5px;color:var(--text);outline:none;" />
+            </sc-if>
+            <sc-if value="{{ notEditingTopic }}">
+              <div onClick="{{ startEditTopic }}" title="Click to edit topic" style="flex:1;min-width:0;color:var(--text2);font-size:12.5px;cursor:text;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ topicText }}</div>
+            </sc-if>
+            <sc-if value="{{ searchOpen }}">
+              <div style="display:flex;align-items:center;gap:6px;background:var(--field);border:1px solid var(--field-border);border-radius:7px;padding:3px 8px;">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style="color:var(--text3);"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <input value="{{ search }}" onChange="{{ onSearchChange }}" ref="{{ searchRef }}" placeholder="Find in conversation" style="background:transparent;border:none;outline:none;color:var(--text);font-size:12.5px;width:170px;" />
+                <button onClick="{{ closeSearch }}" style="border:none;background:transparent;color:var(--text3);cursor:default;font-size:14px;line-height:1;">×</button>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- connecting / offline state -->
+        <sc-if value="{{ connecting }}">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+            <div style="width:26px;height:26px;border-radius:50%;border:2.5px solid var(--sep);border-top-color:var(--text2);animation:spin .8s linear infinite;"></div>
+            <div style="font-size:15px;font-weight:600;color:var(--text);">Connecting to {{ connectName }}…</div>
+            <div style="font-family:ui-monospace, SF Mono, Menlo, monospace;font-size:11.5px;color:var(--text3);line-height:1.7;text-align:left;">
+              <sc-for list="{{ connectLines }}" as="l" hint-placeholder-count="3"><div>{{ l }}</div></sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ offline }}">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
+            <div style="width:9px;height:9px;border-radius:50%;background:var(--text3);"></div>
+            <div style="font-size:15px;font-weight:600;color:var(--text);">{{ connectName }} is disconnected</div>
+            <button onClick="{{ connectNet }}" style="padding:7px 18px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:500;cursor:default;">Connect</button>
+          </div>
+        </sc-if>
+
+        <!-- scrollback -->
+        <sc-if value="{{ liveContent }}">
+          <div ref="{{ scrollRef }}" onScroll="{{ onScroll }}" style="flex:1; overflow-y:auto; padding:12px 0 16px; min-height:0;">
+            <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+              <sc-if value="{{ r.isDivider }}">
+                <div style="display:flex;align-items:center;gap:10px;padding:7px 16px;">
+                  <div style="flex:1;height:1px;background:var(--mention);opacity:.45;"></div>
+                  <span style="color:var(--mention);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">New Messages</span>
+                  <div style="flex:1;height:1px;background:var(--mention);opacity:.45;"></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ r.isEvent }}">
+                <div style="padding:3px 18px 3px 63px;">
+                  <button onClick="{{ r.toggle }}" style="border:none;background:transparent;color:var(--text3);font-size:12.5px;cursor:default;text-align:left;padding:1px 0;">{{ r.summary }}</button>
+                  <sc-if value="{{ r.expanded }}">
+                    <sc-for list="{{ r.eventLines }}" as="e"><div style="color:var(--text3);font-size:12px;font-family:ui-monospace, SF Mono, Menlo, monospace;padding:1px 0;">{{ e.text }}</div></sc-for>
+                  </sc-if>
+                </div>
+              </sc-if>
+              <sc-if value="{{ r.isServer }}">
+                <div style="padding:1px 18px 1px 63px;color:var(--text3);font-family:ui-monospace, SF Mono, Menlo, monospace;font-size:12px;line-height:1.55;word-break:break-word;">{{ r.body }}</div>
+              </sc-if>
+              <sc-if value="{{ r.isNotice }}">
+                <div style="padding:3px 18px 3px 63px;color:var(--text2);font-size:13.5px;line-height:1.5;word-break:break-word;"><span style="color:var(--notice);font-weight:600;">{{ r.nick }}</span> &nbsp;{{ r.body }}</div>
+              </sc-if>
+              <sc-if value="{{ r.isAction }}">
+                <div style="padding:3px 18px 3px 63px;font-style:italic;color:var(--text2);font-size:14px;line-height:1.5;word-break:break-word;">{{ r.body }}</div>
+              </sc-if>
+              <sc-if value="{{ r.isMsg }}">
+                <div style="{{ r.containerStyle }}">
+                  <div style="{{ r.avatarSlot }}"><sc-if value="{{ r.showNick }}"><span style="{{ r.avatarStyle }}">{{ r.initial }}</span></sc-if></div>
+                  <div style="flex:1;min-width:0;">
+                    <sc-if value="{{ r.showNick }}"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px;"><span style="{{ r.nameStyle }}">{{ r.nick }}</span><span style="font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums;">{{ r.ts }}</span></div></sc-if>
+                    <span style="{{ r.textStyle }}">{{ r.body }}</span>
+                    <sc-if value="{{ r.previewLink }}">
+                      <div style="margin-top:7px;width:400px;max-width:100%;border:1px solid var(--field-border);border-radius:9px;padding:10px 13px;display:flex;gap:11px;align-items:center;background:var(--hover);">
+                        <div style="width:36px;height:36px;border-radius:8px;background:var(--sel);display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:15px;flex-shrink:0;">↗</div>
+                        <div style="min-width:0;">
+                          <div style="font-size:12.5px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.previewLink.title }}</div>
+                          <div style="font-size:11px;color:var(--text2);">{{ r.previewLink.meta }}</div>
+                        </div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ r.previewImage }}">
+                      <div style="margin-top:7px;width:360px;max-width:100%;border:1px solid var(--field-border);border-radius:9px;overflow:hidden;">
+                        <div style="height:150px;background:linear-gradient(135deg,#5b6cff,#a23bd8 55%,#ff7a59);"></div>
+                        <div style="padding:6px 11px;font-size:11px;color:var(--text2);display:flex;justify-content:space-between;"><span>{{ r.previewImage.label }}</span><span>{{ r.previewImage.dims }}</span></div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-if>
+            </sc-for>
+          </div>
+
+          <!-- jump to latest -->
+          <sc-if value="{{ showJump }}">
+            <button onClick="{{ jumpBottom }}" style="position:absolute;right:18px;bottom:84px;display:flex;align-items:center;gap:6px;padding:6px 13px;border:1px solid var(--field-border);background:var(--pop);border-radius:16px;color:var(--text);font-size:12px;font-weight:500;cursor:default;box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:5;">Jump to latest ↓</button>
+          </sc-if>
+
+          <!-- composer -->
+          <div style="padding:10px 16px 14px; border-top:1px solid var(--sep); position:relative;">
+            <sc-if value="{{ comp }}">
+              <div style="position:absolute;left:16px;bottom:100%;margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;">
+                <sc-for list="{{ compChips }}" as="c"><span style="{{ c.style }}">{{ c.nick }}</span></sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ slashOpen }}">
+              <div style="position:absolute;left:16px;right:16px;bottom:100%;margin-bottom:8px;background:var(--pop);border:1px solid var(--field-border);border-radius:11px;box-shadow:0 12px 36px rgba(0,0,0,.32);overflow:hidden;padding:5px;">
+                <sc-for list="{{ slashList }}" as="s" hint-placeholder-count="4">
+                  <div onClick="{{ s.pick }}" style="{{ s.style }}">
+                    <span style="font-family:ui-monospace, SF Mono, Menlo, monospace;font-size:12.5px;">/{{ s.cmd }}</span>
+                    <span style="font-size:11.5px;opacity:.65;">{{ s.args }}</span>
+                    <span style="margin-left:auto;font-size:11.5px;opacity:.65;">{{ s.desc }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <div style="display:flex; align-items:flex-end; gap:8px;">
+              <div style="flex:1; display:flex; align-items:flex-end; background:var(--field); border:1px solid var(--field-border); border-radius:11px; padding:7px 11px;">
+                <textarea value="{{ draft }}" onChange="{{ onDraftChange }}" onKeyDown="{{ onComposerKey }}" ref="{{ composerRef }}" placeholder="{{ composerPlaceholder }}" rows="1" style="flex:1;resize:none;border:none;outline:none;background:transparent;color:var(--text);font-size:13.5px;line-height:1.45;max-height:120px;min-height:20px;"></textarea>
+              </div>
+              <button onClick="{{ sendClick }}" title="Send" style="width:30px;height:30px;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:50%;background:var(--accent);color:#fff;cursor:default;font-size:15px;">↑</button>
+            </div>
+            <div style="display:flex; gap:16px; padding:6px 4px 0; font-size:11px; color:var(--text3);">
+              <span>↩ send</span><span>⇧↩ newline</span><span>⇥ complete</span><span>/ commands</span>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- MEMBER LIST -->
+      <sc-if value="{{ showMembers }}">
+        <div style="width:200px; flex-shrink:0; background:var(--detail); border-left:1px solid var(--sep); display:flex; flex-direction:column;">
+          <div style="padding:11px 14px 8px; border-bottom:1px solid var(--sep);">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text3);">Members</div>
+            <div style="font-size:12.5px;color:var(--text2);margin-top:1px;">{{ memberCount }} online</div>
+          </div>
+          <div style="flex:1; overflow-y:auto; padding:6px 4px 14px;">
+            <sc-if value="{{ hasOps }}">
+              <div style="padding:8px 12px 3px;font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text3);">{{ opLabel }}</div>
+              <sc-for list="{{ opGroup }}" as="m"><div onContextMenu="{{ m.onCtx }}" onClick="{{ m.onCtx }}" style="display:flex;align-items:center;gap:7px;padding:3px 12px;margin:0 4px;border-radius:5px;cursor:default;" style-hover="background:var(--hover);"><span style="{{ m.dotStyle }}"></span><span style="{{ m.prefixStyle }}">{{ m.prefix }}</span><span style="{{ m.nameStyle }}">{{ m.nick }}</span></div></sc-for>
+            </sc-if>
+            <sc-if value="{{ hasVoice }}">
+              <div style="padding:8px 12px 3px;font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text3);">{{ voiceLabel }}</div>
+              <sc-for list="{{ voiceGroup }}" as="m"><div onContextMenu="{{ m.onCtx }}" onClick="{{ m.onCtx }}" style="display:flex;align-items:center;gap:7px;padding:3px 12px;margin:0 4px;border-radius:5px;cursor:default;" style-hover="background:var(--hover);"><span style="{{ m.dotStyle }}"></span><span style="{{ m.prefixStyle }}">{{ m.prefix }}</span><span style="{{ m.nameStyle }}">{{ m.nick }}</span></div></sc-for>
+            </sc-if>
+            <sc-if value="{{ hasReg }}">
+              <div style="padding:8px 12px 3px;font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--text3);">{{ regLabel }}</div>
+              <sc-for list="{{ regGroup }}" as="m"><div onContextMenu="{{ m.onCtx }}" onClick="{{ m.onCtx }}" style="display:flex;align-items:center;gap:7px;padding:3px 12px;margin:0 4px;border-radius:5px;cursor:default;" style-hover="background:var(--hover);"><span style="{{ m.dotStyle }}"></span><span style="{{ m.prefixStyle }}">{{ m.prefix }}</span><span style="{{ m.nameStyle }}">{{ m.nick }}</span></div></sc-for>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ===== QUICK SWITCHER ===== -->
+    <sc-if value="{{ quickOpen }}">
+      <div onClick="{{ closeQuick }}" style="position:absolute;inset:0;background:rgba(0,0,0,.28);display:flex;align-items:flex-start;justify-content:center;padding-top:13vh;z-index:50;">
+        <div onClick="{{ stop }}" style="width:560px;max-width:92%;background:var(--pop);border:1px solid var(--field-border);border-radius:13px;box-shadow:0 30px 80px rgba(0,0,0,.5);overflow:hidden;animation:qsIn .14s ease;">
+          <div style="padding:13px 15px;border-bottom:1px solid var(--sep);display:flex;align-items:center;gap:11px;">
+            <span style="color:var(--text3);font-size:14px;">⌘K</span>
+            <input ref="{{ quickRef }}" value="{{ quickQuery }}" onChange="{{ onQuickChange }}" onKeyDown="{{ onQuickKey }}" placeholder="Jump to a channel or person…" style="flex:1;background:transparent;border:none;outline:none;color:var(--text);font-size:16px;" />
+          </div>
+          <div style="max-height:46vh;overflow-y:auto;padding:6px;">
+            <sc-for list="{{ quickResults }}" as="q" hint-placeholder-count="6">
+              <div onClick="{{ q.pick }}" style="{{ q.style }}">
+                <span style="{{ q.avatarStyle }}">{{ q.initial }}</span>
+                <span style="font-size:13.5px;font-weight:500;">{{ q.name }}</span>
+                <span style="{{ q.netStyle }}">{{ q.net }}</span>
+              </div>
+            </sc-for>
+            <sc-if value="{{ quickEmpty }}"><div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;">No matches</div></sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ===== CONTEXT MENU ===== -->
+    <sc-if value="{{ ctxMenu }}">
+      <div onClick="{{ closeCtx }}" onContextMenu="{{ closeCtx }}" style="position:fixed;inset:0;z-index:60;">
+        <div onClick="{{ stop }}" style="{{ ctxStyle }}">
+          <sc-for list="{{ ctxMenu.items }}" as="i"><div onClick="{{ i.onClick }}" style="{{ i.style }}" style-hover="background:var(--hover);">{{ i.label }}</div></sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;graphite&quot;,&quot;blue&quot;,&quot;multicolor&quot;],&quot;default&quot;:&quot;graphite&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showTimestamps&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.mid = 5000;
+    this.scrollRef = React.createRef();
+    this.quickRef = React.createRef();
+    this.searchRef = React.createRef();
+    this.topicRef = React.createRef();
+    this.composerRef = React.createRef();
+    this._pq = false; this._ps = false; this._pe = false;
+    this.scrollPending = true;
+    this.state = this.buildState();
+  }
+
+  buildState(){
+    const mk = (nick, mode, away) => ({ nick, mode: mode||'', away: !!away });
+    const me = 'mcimpeanu';
+    const convs = {};
+    const C = (id, kind, name, props) => { convs[id] = Object.assign({ id, kind, name, topic:'', members:[], memberCount:0, messages:[], unread:0, mentions:0, firstUnread:null }, props||{}); };
+
+    // ---- Undernet ----
+    C('undernet/$server','server','Undernet',{ messages:[
+      {id:'sv1',type:'server',text:'*** Looking up your hostname...',ts:'09:14'},
+      {id:'sv2',type:'server',text:'*** Found your hostname',ts:'09:14'},
+      {id:'sv3',type:'server',text:'*** Connected to Ann-Arbor.MI.US.Undernet.org (port 6697, TLSv1.3)',ts:'09:14'},
+      {id:'sv4',type:'server',text:'- Ann-Arbor.MI.US.Undernet.org Message of the Day -',ts:'09:14'},
+      {id:'sv5',type:'server',text:'- Welcome to the Undernet IRC Network. Please read the AUP: https://www.undernet.org/aup',ts:'09:14'},
+      {id:'sv6',type:'server',text:'- This server is provided by volunteers. Be excellent to each other.',ts:'09:14'},
+      {id:'sv7',type:'server',text:'*** You are connected with TLSv1.3 / TLS_AES_256_GCM_SHA384',ts:'09:14'},
+      {id:'sv8',type:'notice',nick:'X',text:'AUTHENTICATION SUCCESSFUL. You are now logged in as mcimpeanu.',ts:'09:14'},
+    ]});
+
+    C('undernet/#coder-com','channel','#coder-com',{
+      topic:'Undernet coder-com  ·  ircd dev & ops  ·  https://github.com/coder-com/ircd  ·  release freeze Fri 17:00 UTC',
+      memberCount:47,
+      members:[mk('X','op'),mk('Gandalf','op'),mk('sparky','op'),mk('nuke','op'),mk('ada','voice'),mk('mizilla','voice'),
+        mk('biff'),mk('dex'),mk('ev'),mk('fenn'),mk('gus','',true),mk('hex'),mk('klein','',true),mk('lain'),mk('mara','',true),
+        mk('mcimpeanu'),mk('nyx'),mk('ozric'),mk('packet'),mk('q0re'),mk('tory'),mk('void')],
+      messages:[
+        {id:'cc1',type:'join',nick:'void',text:'~void@host-12-44.pool.undernet.org'},
+        {id:'cc2',type:'join',nick:'ada',text:'~ada@gw.geneva.ch'},
+        {id:'cc3',type:'join',nick:'biff',text:'~biff@cpe-71-x.dynamic'},
+        {id:'cc4',type:'quit',nick:'klein',text:'Ping timeout: 248 seconds'},
+        {id:'cc5',type:'join',nick:'dex',text:'~dex@unaffiliated/dex'},
+        {id:'cc6',type:'msg',nick:'sparky',text:'@X is being slow again — anyone else seeing auth lag this morning?',ts:'10:31'},
+        {id:'cc7',type:'msg',nick:'void',text:'yeah X took ~30s to op me earlier',ts:'10:31'},
+        {id:'cc8',type:'msg',nick:'ada',text:"it's the EU split, Ann-Arbor is fine though",ts:'10:32'},
+        {id:'cc9',type:'msg',nick:'ada',text:'try /server us.undernet.org if Geneva keeps lagging',ts:'10:32'},
+        {id:'cc10',type:'action',nick:'biff',text:'kicks the routing table until it behaves',ts:'10:33'},
+        {id:'cc11',type:'msg',nick:'q0re',text:'pushed the parser fix → https://github.com/coder-com/ircd/pull/482',ts:'10:35',preview:{kind:'link',title:'parser: handle IRCv3 message tags before the prefix  ·  PR #482',meta:'github.com  ·  coder-com/ircd  ·  +212 −38'}},
+        {id:'cc12',type:'msg',nick:'q0re',text:'flamegraph after the fix, p99 parse time down ~40%:',ts:'10:35',preview:{kind:'image',label:'flamegraph-after.png',dims:'1840 × 720'}},
+        {id:'cc13',type:'notice',nick:'X',text:'You have been opped on #coder-com. Channel modes are now synced.',ts:'10:36'},
+        {id:'cc14',type:'msg',nick:'packet',text:'mcimpeanu: did you get a chance to review #482? would love to ship before the freeze',ts:'10:41'},
+        {id:'cc15',type:'msg',nick:'lain',text:'I can take a pass too if it helps split the load',ts:'10:42'},
+      ]});
+
+    C('undernet/#help','channel','#help',{
+      topic:'Welcome to #help  ·  Nick & channel registration via X  ·  read the FAQ first  ·  no flooding',
+      memberCount:89,
+      members:[mk('Servo','op'),mk('helpdesk','voice'),mk('frank'),mk('newbie22'),mk('zoe'),mk('rk'),mk('tilde'),mk('opus'),mk('vee'),mk('mcimpeanu')],
+      unread:3, firstUnread:'hp2',
+      messages:[
+        {id:'hp1',type:'msg',nick:'Servo',text:'Welcome to #help! To register your nick:  /msg X@channels.undernet.org help register',ts:'08:00'},
+        {id:'hp2',type:'msg',nick:'newbie22',text:"how do I get my channel back? X keeps saying I'm not authed",ts:'12:30'},
+        {id:'hp3',type:'msg',nick:'frank',text:'newbie22: /msg x@channels.undernet.org login <user> <pass>',ts:'12:31'},
+        {id:'hp4',type:'msg',nick:'newbie22',text:'ohh that worked, thank you!!',ts:'12:33'},
+      ]});
+
+    C('undernet/#wasteland','channel','#wasteland',{
+      topic:'the wasteland  ·  off-topic & archives  ·  no warez  ·  SCAVENGE responsibly',
+      memberCount:31,
+      members:[mk('Wraith','op'),mk('rover'),mk('salv'),mk('grit'),mk('mole'),mk('ash'),mk('dune'),mk('pax'),mk('mcimpeanu')],
+      unread:2, mentions:1, firstUnread:'wl4',
+      messages:[
+        {id:'wl1',type:'msg',nick:'Wraith',text:'reminder: no warez talk in here, this is a scavenge & archive channel',ts:'09:02'},
+        {id:'wl2',type:'msg',nick:'rover',text:'found a working mirror of the old undernet ops docs',ts:'12:10'},
+        {id:'wl3',type:'msg',nick:'rover',text:'http://docs.undernet.org/archive/cservice.html',ts:'12:10',preview:{kind:'link',title:'CService / X Command Reference (archived)',meta:'docs.undernet.org'}},
+        {id:'wl4',type:'msg',nick:'salv',text:'mcimpeanu you around? need a hand with /msg X login, it keeps rejecting me',ts:'12:48'},
+        {id:'wl5',type:'msg',nick:'salv',text:'never mind — had caps lock on. classic 🙂',ts:'12:49'},
+      ]});
+
+    C('undernet/#zelda','channel','#zelda',{
+      topic:"it's dangerous to go alone  ·  OoT any% run tonight 21:00  ·  spoilers tagged",
+      memberCount:12,
+      members:[mk('navi','op'),mk('link2'),mk('zora'),mk('saria'),mk('darknut'),mk('mcimpeanu')],
+      messages:[
+        {id:'zl1',type:'msg',nick:'navi',text:'hey! listen!',ts:'11:00'},
+        {id:'zl2',type:'msg',nick:'link2',text:'speedrun tonight at 21:00, any% no wrong-warp. who is in',ts:'12:55'},
+      ]});
+
+    C('undernet/catnip','dm','catnip',{ unread:1, mentions:1, firstUnread:'dm3', messages:[
+      {id:'dm1',type:'msg',nick:'catnip',text:'did the SASL patch land yet?',ts:'12:20'},
+      {id:'dm2',type:'msg',nick:'mcimpeanu',text:"almost — q0re's reviewing #482 right now",ts:'12:21'},
+      {id:'dm3',type:'msg',nick:'catnip',text:"nice. ping me the second it's merged and I'll cut a release",ts:'12:44'},
+    ]});
+
+    C('undernet/X','dm','X',{ messages:[
+      {id:'x1',type:'msg',nick:'mcimpeanu',text:'login mcimpeanu ********',ts:'09:14'},
+      {id:'x2',type:'notice',nick:'X',text:'AUTHENTICATION SUCCESSFUL. Last login from 84.12.x.x on Jun 16.',ts:'09:14'},
+      {id:'x3',type:'notice',nick:'X',text:'You have access to 3 channels. Use SUSPEND to step away.',ts:'09:14'},
+    ]});
+
+    // ---- EFnet (registering -> connects shortly) ----
+    C('efnet/$server','server','EFnet',{ messages:[] });
+    C('efnet/#linux','channel','#linux',{ topic:'#linux  ·  distro-agnostic help  ·  paste >3 lines to a pastebin', memberCount:412,
+      members:[mk('tux','op'),mk('kern','op'),mk('initd','voice'),mk('grub'),mk('sysd'),mk('mci')], messages:[
+        {id:'lx1',type:'msg',nick:'kern',text:'anyone running the 6.9 rc on btrfs? seeing weird stalls under fio',ts:'11:48'},
+        {id:'lx2',type:'msg',nick:'initd',text:'works here, but I pinned the scheduler to mq-deadline',ts:'11:49'},
+      ]});
+    C('efnet/#c','channel','#c',{ topic:'#c  ·  the C programming language  ·  read the FAQ, then ask', memberCount:198,
+      members:[mk('ritchie','op'),mk('ptr'),mk('malloc'),mk('mci')], messages:[
+        {id:'c1',type:'msg',nick:'ptr',text:'no, you still have to free it',ts:'12:02'},
+      ]});
+
+    // ---- Libera.Chat (offline) ----
+    C('libera/$server','server','Libera.Chat',{ messages:[] });
+    C('libera/#irc','channel','#irc',{ topic:'', memberCount:0, members:[], messages:[] });
+
+    const networks = [
+      { id:'undernet', name:'Undernet', server:'Ann-Arbor.MI.US.Undernet.org', nick:'mcimpeanu', state:'connected', expanded:true,
+        items:['undernet/#coder-com','undernet/#help','undernet/#wasteland','undernet/#zelda','undernet/catnip','undernet/X'] },
+      { id:'efnet', name:'EFnet', server:'irc.efnet.org', nick:'mci', state:'registering', expanded:true,
+        items:['efnet/#linux','efnet/#c'] },
+      { id:'libera', name:'Libera.Chat', server:'irc.libera.chat', nick:'m_c', state:'offline', expanded:false,
+        items:['libera/#irc'] },
+    ];
+
+    return {
+      theme:'dark', networks, convs, selected:'undernet/#coder-com',
+      sidebarOpen:true, memberListOpen:true,
+      draft:'', slashOpen:false, slashIndex:0, comp:null,
+      quickOpen:false, quickQuery:'', quickIndex:0,
+      ctxMenu:null, editingTopic:false, topicDraft:'',
+      expandedEvents:{}, atBottom:true, searchOpen:false, search:'',
+      connectLines:[], me,
+    };
+  }
+
+  // ---------- lifecycle ----------
+  componentDidMount(){
+    window.addEventListener('keydown', this.onGlobalKey);
+    this.live = setInterval(()=>this.tick(), 5200);
+    // EFnet finishes connecting after a beat
+    this._lineTimers = [];
+    const lines = [
+      '*** Connecting to irc.efnet.org (195.x.x.x:6697)…',
+      '*** TLS handshake complete (TLSv1.3)',
+      '*** Checking ident…',
+      '*** No ident response; using ~mci',
+      '*** Registering connection…',
+    ];
+    lines.forEach((l,i)=> this._lineTimers.push(setTimeout(()=> this.setState(s=>({connectLines:[...s.connectLines,l]})), 400 + i*620)));
+    this._lineTimers.push(setTimeout(()=> this.finishConnect('efnet'), 4200));
+    this.scrollToBottom();
+  }
+  componentWillUnmount(){
+    window.removeEventListener('keydown', this.onGlobalKey);
+    clearInterval(this.live);
+    (this._lineTimers||[]).forEach(clearTimeout);
+  }
+  componentDidUpdate(){
+    if(this.scrollPending){ this.scrollPending=false; this.scrollToBottom(); }
+    if(this.state.quickOpen && !this._pq && this.quickRef.current) this.quickRef.current.focus();
+    this._pq = this.state.quickOpen;
+    if(this.state.searchOpen && !this._ps && this.searchRef.current) this.searchRef.current.focus();
+    this._ps = this.state.searchOpen;
+    if(this.state.editingTopic && !this._pe && this.topicRef.current){ this.topicRef.current.focus(); this.topicRef.current.select(); }
+    this._pe = this.state.editingTopic;
+  }
+  scrollToBottom(){ const el=this.scrollRef.current; if(el) el.scrollTop = el.scrollHeight; }
+
+  // ---------- helpers ----------
+  net(id){ return this.state.networks.find(n=>n.id===id); }
+  netOf(convId){ return this.net(convId.split('/')[0]); }
+  curNet(){ return this.netOf(this.state.selected); }
+  curConv(){ return this.state.convs[this.state.selected]; }
+  selfNick(){ return this.curNet().nick; }
+  now(){ const d=new Date(); return d.getHours()+':'+String(d.getMinutes()).padStart(2,'0'); }
+
+  nickColor(nick){
+    let h=0; for(let i=0;i<nick.length;i++) h=(h*31 + nick.charCodeAt(i))>>>0;
+    const hues=[6,20,33,46,140,165,188,208,232,262,288,318,338];
+    const hue=hues[h%hues.length];
+    return this.state.theme==='dark' ? 'hsl('+hue+' 68% 70%)' : 'hsl('+hue+' 58% 40%)';
+  }
+
+  renderBody(text, selfNick, link){
+    const nodes=[]; let key=0;
+    const urlRe=/(https?:\/\/[^\s]+)/g;
+    const esc=(selfNick||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const mRe = selfNick ? new RegExp('('+esc+')','gi') : null;
+    String(text).split(urlRe).forEach(part=>{
+      if(/^https?:\/\//.test(part)){
+        nodes.push(React.createElement('a',{key:key++,href:part,onClick:e=>e.preventDefault(),
+          style:{color:link,textDecoration:'none',cursor:'pointer',borderBottom:'1px solid '+link+'55'}}, part.replace(/^https?:\/\//,'')));
+      } else if(mRe){
+        part.split(mRe).forEach(s=>{
+          if(s && s.toLowerCase()===selfNick.toLowerCase())
+            nodes.push(React.createElement('span',{key:key++,style:{background:'var(--mention)',color:'#fff',borderRadius:'4px',padding:'0 4px',fontWeight:600}}, s));
+          else if(s) nodes.push(s);
+        });
+      } else if(part) nodes.push(part);
+    });
+    return nodes;
+  }
+
+  flatConvs(){ const out=[]; for(const net of this.state.networks){ for(const id of net.items){ const c=this.state.convs[id]; if(c && c.kind!=='server') out.push({id,c,net}); } } return out; }
+
+  // ---------- state mutation ----------
+  updateConv(id, patchFn){ this.setState(s=>{ const convs={...s.convs}; convs[id]={...convs[id], ...patchFn(convs[id])}; return {convs}; }); }
+
+  appendMsg(id, msg, opts){
+    opts = opts||{};
+    const m = Object.assign({ id:'m'+(this.mid++), ts:this.now() }, msg);
+    this.updateConv(id, c=>{
+      const patch={ messages:[...c.messages, m] };
+      if(opts.incoming && id!==this.state.selected){
+        patch.unread=(c.unread||0)+1;
+        if(c.firstUnread==null) patch.firstUnread=m.id;
+        if(opts.mention || c.kind==='dm') patch.mentions=(c.mentions||0)+1;
+      }
+      return patch;
+    });
+    if(id===this.state.selected && this.state.atBottom) this.scrollPending=true;
+  }
+  systemMsg(id, text){ this.appendMsg(id, {type:'server', text}); }
+
+  select = (id)=>{
+    this.setState(s=>{ const convs={...s.convs}; const c=convs[id]; if(c) convs[id]={...c, unread:0, mentions:0}; return {selected:id, convs, searchOpen:false, search:'', editingTopic:false, slashOpen:false, comp:null}; });
+    this.scrollPending=true;
+  };
+  toggleNet = (netId)=>{ this.setState(s=>({networks: s.networks.map(n=> n.id===netId ? {...n, expanded:!n.expanded}: n)})); };
+  toggleTheme = ()=> this.setState(s=>({theme: s.theme==='dark'?'light':'dark'}));
+  toggleSidebar = ()=> this.setState(s=>({sidebarOpen:!s.sidebarOpen}));
+  toggleMemberList = ()=> this.setState(s=>({memberListOpen:!s.memberListOpen}));
+
+  finishConnect(netId){
+    this.setState(s=>({ networks: s.networks.map(n=> n.id===netId ? {...n, state:'connected'} : n) }));
+    const sid = netId+'/$server';
+    this.appendMsg(sid,{type:'server',text:'*** Connected to '+this.net(netId).server+' (TLSv1.3)'});
+    this.appendMsg(sid,{type:'server',text:'- Welcome to '+this.net(netId).name+'. Have fun.'});
+  }
+  connectNet = (netId)=>{
+    this.setState(s=>({ networks: s.networks.map(n=> n.id===netId ? {...n, state:'registering'} : n), connectLines:['*** Connecting to '+this.net(netId).server+'…'] }));
+    setTimeout(()=> this.setState(s=>({connectLines:[...s.connectLines,'*** TLS handshake complete']})), 700);
+    setTimeout(()=> this.setState(s=>({connectLines:[...s.connectLines,'*** Registering connection…']})), 1400);
+    setTimeout(()=> this.finishConnect(netId), 2400);
+  };
+
+  // ---------- composer ----------
+  onDraftChange = (e)=>{ const v=e.target.value; const slashOpen = v.startsWith('/') && !v.includes(' '); this.setState({draft:v, slashOpen, slashIndex:0, comp:null}); };
+  onComposerKey = (e)=>{
+    if(e.key==='Tab'){ e.preventDefault();
+      if(this.state.slashOpen){ const list=this.slashSuggestions(); const s=list[this.state.slashIndex]||list[0]; if(s) this.setState({draft:'/'+s.cmd+' ', slashOpen:false}); }
+      else this.completeNick();
+      return; }
+    if(this.state.slashOpen && (e.key==='ArrowDown'||e.key==='ArrowUp')){ e.preventDefault(); const n=this.slashSuggestions().length; if(!n) return; this.setState(s=>({slashIndex:(s.slashIndex + (e.key==='ArrowDown'?1:n-1))%n})); return; }
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); this.send(); return; }
+    if(e.key==='Escape'){ this.setState({slashOpen:false, comp:null}); }
+  };
+  completeNick(){
+    const draft=this.state.draft;
+    if(this.state.comp && draft===this.state.comp.result){
+      const c=this.state.comp; const idx=(c.idx+1)%c.matches.length;
+      const chosen=c.matches[idx]; const suffix = c.base.trim().length===0 ? ': ' : ' ';
+      const result=c.base+chosen+suffix;
+      this.setState({draft:result, comp:{...c, idx, result}});
+      return;
+    }
+    const m=draft.match(/(\S*)$/); const token=m[1]; if(!token) return;
+    const start=draft.length-token.length;
+    const members=(this.curConv().members||[]).map(x=>x.nick);
+    const matches=members.filter(n=> n.toLowerCase().startsWith(token.toLowerCase()));
+    if(!matches.length) return;
+    const base=draft.slice(0,start); const suffix = base.trim().length===0 ? ': ' : ' ';
+    const result=base+matches[0]+suffix;
+    this.setState({draft:result, comp:{base, matches, idx:0, result}});
+  }
+  slashSuggestions(){
+    const cmds=[
+      {cmd:'join',args:'#channel',desc:'Join a channel'},
+      {cmd:'msg',args:'<nick> <text>',desc:'Send a private message'},
+      {cmd:'me',args:'<action>',desc:'Send an action'},
+      {cmd:'nick',args:'<newnick>',desc:'Change your nickname'},
+      {cmd:'topic',args:'<text>',desc:'Set the channel topic'},
+      {cmd:'whois',args:'<nick>',desc:'Look up a user'},
+      {cmd:'query',args:'<nick>',desc:'Open a private chat'},
+      {cmd:'part',args:'',desc:'Leave the current channel'},
+      {cmd:'quit',args:'<message>',desc:'Disconnect from the server'},
+    ];
+    const q=this.state.draft.slice(1).toLowerCase();
+    return cmds.filter(c=> c.cmd.startsWith(q));
+  }
+  send(){
+    const text=this.state.draft.trim();
+    if(!text){ return; }
+    if(text.startsWith('/')) this.runCommand(text);
+    else this.appendMsg(this.state.selected, {type:'msg', nick:this.selfNick(), text});
+    this.setState({draft:'', slashOpen:false, comp:null});
+    this.scrollPending=true;
+  }
+  runCommand(text){
+    const parts=text.slice(1).split(' '); const cmd=parts[0].toLowerCase(); const rest=parts.slice(1); const arg=rest.join(' ');
+    const sel=this.state.selected;
+    switch(cmd){
+      case 'me': if(arg) this.appendMsg(sel,{type:'action',nick:this.selfNick(),text:arg}); break;
+      case 'join': this.joinChannel(arg); break;
+      case 'part': this.partCurrent(); break;
+      case 'nick': if(arg) this.changeNick(arg.split(' ')[0]); break;
+      case 'topic': this.setTopicCmd(arg); break;
+      case 'whois': this.whois(rest[0]||this.selfNick()); break;
+      case 'msg': case 'query': this.openDM(rest[0], rest.slice(1).join(' ')); break;
+      case 'quit': this.systemMsg(sel, '*** You have quit ('+(arg||'Leaving')+')'); break;
+      default: this.systemMsg(sel, '*** Unknown command: /'+cmd);
+    }
+  }
+  joinChannel(name){
+    if(!name) return; const net=this.curNet();
+    const cname = name.startsWith('#')? name : '#'+name;
+    const id = net.id+'/'+cname;
+    if(!this.state.convs[id]){
+      this.setState(s=>{
+        const convs={...s.convs};
+        convs[id]={ id, kind:'channel', name:cname, topic:'', memberCount:1, members:[{nick:net.nick,mode:'',away:false}], messages:[{id:'j'+(this.mid++),type:'server',text:'*** Now talking in '+cname},{id:'j'+(this.mid++),type:'server',text:'*** '+cname+' created '+this.now()}], unread:0, mentions:0, firstUnread:null };
+        const networks=s.networks.map(n=> n.id===net.id ? {...n, items:[...n.items.filter(x=>this.state.convs[x] && this.state.convs[x].kind==='channel'||true), id].filter((v,i,a)=>a.indexOf(v)===i)} : n);
+        return {convs, networks};
+      });
+    }
+    this.select(id);
+  }
+  partCurrent(){
+    const id=this.state.selected; const net=this.curNet();
+    if(this.state.convs[id].kind==='server') return;
+    const fallback = net.items.find(x=> x!==id) || net.id+'/$server';
+    this.setState(s=>{ const convs={...s.convs}; delete convs[id];
+      const networks=s.networks.map(n=> n.id===net.id ? {...n, items:n.items.filter(x=>x!==id)} : n);
+      return {convs, networks, selected:fallback}; });
+    this.scrollPending=true;
+  }
+  changeNick(nn){
+    const net=this.curNet();
+    this.setState(s=>({networks:s.networks.map(n=> n.id===net.id ? {...n, nick:nn}: n)}));
+    this.systemMsg(this.state.selected, '*** You are now known as '+nn);
+  }
+  setTopicCmd(t){ this.updateConv(this.state.selected, ()=>({topic:t})); this.systemMsg(this.state.selected, '*** '+this.selfNick()+' changed the topic to: '+t); }
+  whois(nick){
+    const id=this.state.selected; const host='~'+nick.toLowerCase()+'@'+nick.toLowerCase()+'.users.undernet.org';
+    [ nick+' is '+host+' * '+nick,
+      nick+' on #coder-com #wasteland',
+      nick+' using Ann-Arbor.MI.US.Undernet.org [Undernet]',
+      nick+' has been idle 4mins 12secs, signed on today at 09:14',
+      nick+' is logged in as '+nick,
+      'End of /WHOIS list.'
+    ].forEach(t=> this.appendMsg(id,{type:'whois',text:t}));
+  }
+  openDM(nick, text){
+    if(!nick) return; const net=this.curNet(); const id=net.id+'/'+nick;
+    if(!this.state.convs[id]){
+      this.setState(s=>{ const convs={...s.convs}; convs[id]={id,kind:'dm',name:nick,topic:'',memberCount:0,members:[],messages:[],unread:0,mentions:0,firstUnread:null};
+        const networks=s.networks.map(n=> n.id===net.id ? {...n, items:[...n.items, id]} : n); return {convs,networks}; });
+    }
+    this.select(id);
+    if(text) setTimeout(()=> this.appendMsg(id,{type:'msg',nick:net.nick,text}), 30);
+  }
+
+  // ---------- quick switcher ----------
+  openQuick = ()=> this.setState({quickOpen:true, quickQuery:'', quickIndex:0});
+  closeQuick = ()=> this.setState({quickOpen:false});
+  stop = (e)=> e.stopPropagation();
+  onQuickChange = (e)=> this.setState({quickQuery:e.target.value, quickIndex:0});
+  quickList(){
+    const q=this.state.quickQuery.toLowerCase().trim();
+    const all=this.flatConvs().map(({id,c,net})=>({id, name:c.name, net:net.name, kind:c.kind}));
+    if(!q) return all;
+    return all.filter(x=> (x.name+' '+x.net).toLowerCase().includes(q));
+  }
+  onQuickKey = (e)=>{
+    const list=this.quickList();
+    if(e.key==='ArrowDown'){ e.preventDefault(); this.setState(s=>({quickIndex:Math.min(s.quickIndex+1, list.length-1)})); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); this.setState(s=>({quickIndex:Math.max(s.quickIndex-1,0)})); }
+    else if(e.key==='Enter'){ e.preventDefault(); const t=list[this.state.quickIndex]; if(t){ this.select(t.id); this.closeQuick(); } }
+    else if(e.key==='Escape'){ e.preventDefault(); this.closeQuick(); }
+  };
+
+  // ---------- global keys ----------
+  onGlobalKey = (e)=>{
+    const meta=e.metaKey||e.ctrlKey;
+    if(meta && e.key.toLowerCase()==='k'){ e.preventDefault(); this.state.quickOpen? this.closeQuick(): this.openQuick(); return; }
+    if(this.state.quickOpen) return;
+    if(meta && e.key.toLowerCase()==='f'){ e.preventDefault(); if(this.curConv().kind==='channel') this.setState({searchOpen:true}); return; }
+    if(meta && e.key.toLowerCase()==='n'){ e.preventDefault(); this.openQuick(); return; }
+    if(meta && /^[1-9]$/.test(e.key)){ e.preventDefault(); const list=this.flatConvs(); const t=list[parseInt(e.key,10)-1]; if(t) this.select(t.id); }
+  };
+
+  // ---------- context menu ----------
+  openCtx = (e, nick)=>{ e.preventDefault(); e.stopPropagation();
+    const id=this.state.selected; const close=()=>this.setState({ctxMenu:null});
+    const items=[
+      {label:'Whois '+nick, onClick:()=>{ this.whois(nick); close(); }},
+      {label:'Message '+nick, onClick:()=>{ this.openDM(nick); close(); }},
+      {label:'Give Op (+o)', onClick:()=>{ this.setMode(id,nick,'op'); this.systemMsg(id,'*** '+this.selfNick()+' sets mode +o '+nick); close(); }},
+      {label:'Give Voice (+v)', onClick:()=>{ this.setMode(id,nick,'voice'); this.systemMsg(id,'*** '+this.selfNick()+' sets mode +v '+nick); close(); }},
+      {label:'Kick '+nick, danger:true, onClick:()=>{ this.kick(id,nick); close(); }},
+      {label:'Ignore '+nick, danger:true, onClick:()=>{ this.systemMsg(id,'*** Now ignoring '+nick); close(); }},
+    ];
+    this.setState({ctxMenu:{x:e.clientX, y:e.clientY, nick, items}});
+  };
+  closeCtx = ()=> this.setState({ctxMenu:null});
+  setMode(id,nick,mode){ this.updateConv(id, c=>({members:c.members.map(m=> m.nick===nick?{...m,mode}:m)})); }
+  kick(id,nick){ this.updateConv(id, c=>({members:c.members.filter(m=>m.nick!==nick), memberCount:Math.max(0,c.memberCount-1)})); this.systemMsg(id,'*** '+nick+' was kicked by '+this.selfNick()); }
+  markRead(id){ this.updateConv(id, ()=>({unread:0, mentions:0, firstUnread:null})); }
+  toggleMute(id){ this.updateConv(id, c=>({muted:!c.muted})); }
+  removeConv(id){ const net=this.netOf(id); if(this.state.convs[id].kind==='server') return;
+    const fallback = net.items.find(x=>x!==id) || net.id+'/$server';
+    const wasSel = this.state.selected===id;
+    this.setState(s=>{ const convs={...s.convs}; delete convs[id]; const networks=s.networks.map(n=> n.id===net.id?{...n, items:n.items.filter(x=>x!==id)}:n); return {convs, networks, selected: wasSel?fallback:s.selected}; });
+    if(wasSel) this.scrollPending=true; }
+  openConvCtx = (e, id)=>{ e.preventDefault(); e.stopPropagation(); const c=this.state.convs[id]; const close=()=>this.setState({ctxMenu:null});
+    const items=[{label:'Mark as Read', onClick:()=>{ this.markRead(id); close(); }}];
+    if(c.kind==='channel'){
+      items.push({label:'Set Topic…', onClick:()=>{ this.select(id); setTimeout(()=>this.startEditTopic(),20); close(); }});
+      items.push({label: c.muted?'Unmute Channel':'Mute Channel', onClick:()=>{ this.toggleMute(id); close(); }});
+      items.push({label:'Copy Channel Name', onClick:()=>{ try{navigator.clipboard.writeText(c.name);}catch(_){} close(); }});
+      items.push({label:'Leave Channel', danger:true, onClick:()=>{ this.removeConv(id); close(); }});
+    } else if(c.kind==='dm'){
+      items.push({label: c.muted?'Unmute':'Mute', onClick:()=>{ this.toggleMute(id); close(); }});
+      items.push({label:'Close Conversation', danger:true, onClick:()=>{ this.removeConv(id); close(); }});
+    }
+    this.setState({ctxMenu:{x:e.clientX, y:e.clientY, items}});
+  };
+
+  // ---------- topic / search ----------
+  startEditTopic = ()=>{ if(this.curConv().kind!=='channel') return; this.setState({editingTopic:true, topicDraft:this.curConv().topic||''}); };
+  onTopicChange = (e)=> this.setState({topicDraft:e.target.value});
+  commitTopic = ()=>{ this.updateConv(this.state.selected, ()=>({topic:this.state.topicDraft})); this.setState({editingTopic:false}); };
+  onTopicKey = (e)=>{ if(e.key==='Enter'){ e.preventDefault(); this.commitTopic(); } else if(e.key==='Escape'){ this.setState({editingTopic:false}); } };
+  openSearch = ()=>{ if(this.curConv().kind==='channel') this.setState({searchOpen:!this.state.searchOpen, search:''}); };
+  onSearchChange = (e)=> this.setState({search:e.target.value});
+  closeSearch = ()=> this.setState({searchOpen:false, search:''});
+
+  // ---------- scroll ----------
+  onScroll = (e)=>{ const el=e.target; const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48; if(atBottom!==this.state.atBottom) this.setState({atBottom}); };
+  jumpBottom = ()=>{ this.scrollToBottom(); };
+  toggleEvents = (gid)=> this.setState(s=>({expandedEvents:{...s.expandedEvents, [gid]: !s.expandedEvents[gid]}}));
+
+  // ---------- live simulation ----------
+  tick(){
+    const pool=[
+      {id:'undernet/#coder-com', lines:[{nick:'lain',text:'rebuilt against the new libuv, no leaks after 2h soak'},{nick:'nyx',text:'X is happy again, eu split fully healed'},{nick:'dex',text:'anyone have the ircv3 sasl spec link handy?'},{nick:'ozric',text:'mcimpeanu nice work on the parser btw',mention:true}]},
+      {id:'undernet/#wasteland', lines:[{nick:'rover',text:'archived another 400MB of logs from 2003'},{nick:'grit',text:'the scanlines on that old client screenshot are immaculate'}]},
+      {id:'undernet/#help', lines:[{nick:'zoe',text:'how do I set +R so only registered nicks can talk?'},{nick:'frank',text:'/mode #yourchan +R'}]},
+    ];
+    const p=pool[Math.floor(Math.random()*pool.length)];
+    const l=p.lines[Math.floor(Math.random()*p.lines.length)];
+    this.appendMsg(p.id, {type:'msg', nick:l.nick, text:l.text}, {incoming:true, mention:!!l.mention});
+  }
+
+  // ---------- render ----------
+  renderVals(){
+    const s=this.state;
+    const accent = this.props.accent ?? 'graphite';
+    const density = this.props.density ?? 'comfortable';
+    const showTimestamps = this.props.showTimestamps ?? true;
+    const dense = density==='compact';
+    const dark = s.theme==='dark';
+
+    const P = dark ? {
+      text:'rgba(255,255,255,.92)', text2:'rgba(255,255,255,.5)', text3:'rgba(255,255,255,.32)',
+      sep:'rgba(255,255,255,.09)', hover:'rgba(255,255,255,.06)', sel:'rgba(255,255,255,.12)',
+      field:'rgba(255,255,255,.07)', fieldBorder:'rgba(255,255,255,.1)',
+      titlebar:'#2c2c2e', sidebar:'#252528', content:'#1d1d1f', detail:'#222225', pop:'#2e2e30',
+      badge:'rgba(255,255,255,.22)', notice:'#e3a857', link:'#69b4ff',
+      desktop:'radial-gradient(1200px 820px at 28% 18%, #3b3656, #1a1726 58%, #0b0a12)'
+    } : {
+      text:'rgba(0,0,0,.85)', text2:'rgba(0,0,0,.5)', text3:'rgba(0,0,0,.32)',
+      sep:'rgba(0,0,0,.08)', hover:'rgba(0,0,0,.045)', sel:'rgba(0,0,0,.085)',
+      field:'#ffffff', fieldBorder:'rgba(0,0,0,.13)',
+      titlebar:'#e9e9ec', sidebar:'#ececef', content:'#ffffff', detail:'#f4f4f6', pop:'#ffffff',
+      badge:'rgba(0,0,0,.3)', notice:'#b5701b', link:'#0a6fd6',
+      desktop:'radial-gradient(1200px 820px at 28% 18%, #d6e3ff, #aac2ee 52%, #8aa6dd)'
+    };
+    const mention = '#0a84ff';
+    const accentColor = accent==='graphite' ? (dark?'#8a8a8e':'#8e8e93') : (dark?'#0a84ff':'#007aff');
+    const blueSel = accent!=='graphite';
+
+    const vars = {
+      '--text':P.text,'--text2':P.text2,'--text3':P.text3,'--sep':P.sep,'--hover':P.hover,'--sel':P.sel,
+      '--field':P.field,'--field-border':P.fieldBorder,'--titlebar':P.titlebar,'--sidebar':P.sidebar,
+      '--content':P.content,'--detail':P.detail,'--pop':P.pop,'--badge':P.badge,'--notice':P.notice,
+      '--link':P.link,'--mention':mention,'--accent':accentColor
+    };
+    const rootStyle = Object.assign({
+      width:'min(1340px,96vw)', height:'min(862px,93vh)', borderRadius:'11px', overflow:'hidden',
+      display:'flex', flexDirection:'column', position:'relative',
+      boxShadow:'0 34px 90px rgba(0,0,0,.5), 0 0 0 0.5px '+(dark?'rgba(0,0,0,.6)':'rgba(0,0,0,.18)'),
+      fontFamily:'-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif',
+      fontSize:'13px', color:P.text, background:P.content
+    }, vars);
+    const desktopStyle = { position:'fixed', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:P.desktop };
+
+    const selfNick=this.selfNick();
+    const cur=this.curConv();
+    const curNet=this.curNet();
+    const connecting = curNet.state==='registering';
+    const offline = curNet.state==='offline';
+    const liveContent = !connecting && !offline;
+
+    // sidebar
+    const stateColor = { connected:'#34c759', registering:'#febc2e', offline:(dark?'#6b6b70':'#b8b8be') };
+    const navNetworks = s.networks.map(net=>{
+      const serverId = net.id+'/$server';
+      const headSel = s.selected===serverId;
+      return {
+        id:net.id, name:net.name, tri: net.expanded?'▾':'▸', expanded:net.expanded,
+        toggle:()=>this.toggleNet(net.id), selectServer:()=>this.select(serverId),
+        dotStyle:{ width:'7px', height:'7px', borderRadius:'50%', flexShrink:0, background:stateColor[net.state]||'#888', animation: net.state==='registering'?'pulse 1.1s ease-in-out infinite':'none' },
+        stateLabel: net.state==='registering'?'connecting…': net.state==='offline'?'offline':'',
+        headerStyle: { display:'flex', alignItems:'center', flex:1, minWidth:0, border:'none', font:'inherit', color:'inherit', cursor:'default', padding:0, borderRadius:'6px', background: headSel?'var(--sel)':'transparent' },
+        items: net.items.map(id=>{
+          const c=s.convs[id]; if(!c) return null;
+          const sel=s.selected===id;
+          const isDm=c.kind==='dm';
+          const muted = !sel && c.unread===0;
+          const rowStyle = {
+            display:'flex', alignItems:'center', gap:'8px', margin:'1px 8px', padding:'4px 8px 4px 8px',
+            borderRadius:'6px', cursor:'default', fontSize:'13px', lineHeight:'1.2',
+            background: sel ? (blueSel?'var(--accent)':'var(--sel)') : 'transparent',
+            color: sel ? (blueSel?'#fff':'var(--text)') : (muted?'var(--text2)':'var(--text)')
+          };
+          const nameStyle = { flex:'1', minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight: c.unread>0?600:400 };
+          if(c.muted){ nameStyle.color='var(--text3)'; nameStyle.fontWeight=400; }
+          const isMention=c.mentions>0;
+          const badgeStyle = {
+            flexShrink:0, fontSize:'11px', fontWeight:600, minWidth:'18px', height:'18px', padding:'0 6px',
+            display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'9px',
+            background: isMention?'var(--mention)':(sel&&blueSel?'rgba(255,255,255,.3)':'var(--badge)'), color:'#fff'
+          };
+          return {
+            id, label:c.name, select:()=>this.select(id),
+            isChannel:c.kind==='channel', isDm,
+            initial:(c.name[0]||'?').toUpperCase(),
+            avatarStyle:{ width:'18px', height:'18px', borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px', fontWeight:600, color:'#fff', background:this.nickColor(c.name) },
+            hashStyle:{ width:'16px', textAlign:'center', flexShrink:0, color: sel?(blueSel?'rgba(255,255,255,.7)':'var(--text3)'):'var(--text3)', fontSize:'13px' },
+            rowStyle, nameStyle, unread:c.unread>0, unreadText:String(c.unread), badgeStyle,
+            onCtx:(e)=>this.openConvCtx(e, id)
+          };
+        }).filter(Boolean)
+      };
+    });
+
+    // header / topic
+    const headerName = cur.kind==='server' ? curNet.name : cur.name;
+    const headerSub = cur.kind==='channel' ? cur.memberCount+' members' : cur.kind==='dm' ? 'direct message' : curNet.server;
+    const headerAvatar = cur.kind==='dm' ? { show:true, initial:(cur.name[0]||'?').toUpperCase(), style:{ width:'22px',height:'22px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:600,color:'#fff',background:this.nickColor(cur.name) } } : {show:false};
+    const isChannel = cur.kind==='channel';
+    const topicText = cur.topic ? cur.topic : (isChannel?'Set a topic…':'');
+    const showTopicBar = isChannel && liveContent;
+
+    // build rows
+    const rows=[]; let prevNick=null; let buf=[];
+    const flush=()=>{ if(buf.length){ const gid=buf[0].id; const expanded=!!s.expandedEvents[gid];
+        const names=buf.slice(0,3).map(e=>e.nick); const extra=buf.length-names.length;
+        const verbs=[]; const j=buf.filter(e=>e.type==='join').length, q=buf.filter(e=>e.type!=='join').length;
+        if(j) verbs.push(j+' joined'); if(q) verbs.push(q+' left');
+        const summary = (expanded?'▾ ':'▸ ') + names.join(', ') + (extra>0?' +'+extra+' others':'') + '  ·  ' + verbs.join(', ');
+        rows.push({ id:'eg-'+gid, isEvent:true, gid, summary, expanded, toggle:()=>this.toggleEvents(gid),
+          eventLines: buf.map(e=>({ id:e.id, text:'*** '+e.nick+' ('+(e.text||'')+') has '+(e.type==='join'?'joined':e.type==='part'?'left':'quit')+(e.type==='quit'?': '+(e.text||''):'') })) });
+        buf=[]; } };
+    const sq=s.searchOpen && s.search ? s.search.toLowerCase() : null;
+    for(const m of cur.messages){
+      if(['join','part','quit'].includes(m.type)){ if(sq){continue;} buf.push(m); continue; }
+      flush();
+      if(sq){ if(!(m.text||'').toLowerCase().includes(sq)) continue; }
+      if(cur.firstUnread===m.id && cur.kind!=='server' && !sq) rows.push({ id:'div', isDivider:true });
+      const ts = showTimestamps ? m.ts||'' : '';
+      if(m.type==='action'){
+        rows.push({ id:m.id, isAction:true, ts, body:[ '✶ ', React.createElement('b',{key:'n',style:{color:this.nickColor(m.nick)}}, m.nick), ' ', ...this.renderBody(m.text, selfNick, P.link) ] });
+        prevNick=null;
+      } else if(m.type==='notice'){
+        rows.push({ id:m.id, isNotice:true, ts, nick:m.nick, body:this.renderBody(m.text, selfNick, P.link) });
+        prevNick=null;
+      } else if(m.type==='server' || m.type==='whois'){
+        rows.push({ id:m.id, isServer:true, ts, body:this.renderBody(m.text, selfNick, P.link) });
+        prevNick=null;
+      } else {
+        const grouped = prevNick===m.nick;
+        const mentionRow = m.nick!==selfNick && selfNick && new RegExp('\\b'+selfNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i').test(m.text);
+        const cont = { display:'flex', gap:'11px', alignItems:'flex-start',
+          padding: (dense? (grouped?'0 18px':'4px 18px 0'):(grouped?'1px 18px':'9px 18px 1px')) };
+        if(mentionRow){ cont.background=(dark?'rgba(10,132,255,.13)':'rgba(0,122,255,.07)'); cont.boxShadow='inset 3px 0 0 var(--mention)'; }
+        rows.push({ id:m.id, isMsg:true, ts, showNick:!grouped, grouped, nick:m.nick, initial:(m.nick[0]||'?').toUpperCase(),
+          avatarSlot:{ width:'34px', flexShrink:0, display:'flex', justifyContent:'center', paddingTop:'1px' },
+          avatarStyle:{ width:'34px', height:'34px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px', fontWeight:600, color:'#fff', background:this.nickColor(m.nick) },
+          nameStyle:{ fontWeight:600, fontSize:'13.5px', color:'var(--text)' },
+          containerStyle:cont, textStyle:{ display:'block', color:'var(--text)', fontSize: dense?'13px':'14px', lineHeight: dense?'1.45':'1.5', wordBreak:'break-word', whiteSpace:'pre-wrap' },
+          body:this.renderBody(m.text, selfNick, P.link),
+          previewImage: m.preview&&m.preview.kind==='image'?m.preview:null,
+          previewLink: m.preview&&m.preview.kind==='link'?m.preview:null });
+        prevNick=m.nick;
+      }
+    }
+    flush();
+
+    // member list
+    const showMembers = isChannel && s.memberListOpen && liveContent;
+    const sortNick=(a,b)=>a.nick.toLowerCase().localeCompare(b.nick.toLowerCase());
+    const mkMember=(m)=>({ nick:m.nick,
+      prefix: m.mode==='op'?'@':m.mode==='voice'?'+':'',
+      prefixStyle:{ width:'12px', flexShrink:0, fontWeight:700, fontFamily:'ui-monospace, SF Mono, Menlo, monospace', color: m.mode==='op'?'#34c759':m.mode==='voice'?'#0a84ff':'transparent' },
+      dotStyle:{ width:'7px', height:'7px', borderRadius:'50%', flexShrink:0, background: m.away?'transparent':'#34c759', boxShadow: m.away?'inset 0 0 0 1.5px var(--text3)':'none' },
+      nameStyle:{ flex:1, minWidth:0, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontSize:'12.5px', fontStyle:m.away?'italic':'normal', color: m.away?'var(--text3)': m.nick===selfNick?'var(--text)':'var(--text2)', fontWeight: m.nick===selfNick?600:400 },
+      onCtx:(e)=>this.openCtx(e, m.nick) });
+    const mem=cur.members||[];
+    const opGroup=mem.filter(m=>m.mode==='op').sort(sortNick).map(mkMember);
+    const voiceGroup=mem.filter(m=>m.mode==='voice').sort(sortNick).map(mkMember);
+    const regGroup=mem.filter(m=>!m.mode).sort(sortNick).map(mkMember);
+
+    // slash + comp
+    const slashList=this.slashSuggestions().map((c,i)=>({ cmd:c.cmd, args:c.args, desc:c.desc, pick:()=>this.setState({draft:'/'+c.cmd+' ', slashOpen:false}),
+      style:{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', borderRadius:'7px', cursor:'default', background: i===s.slashIndex?'var(--accent)':'transparent', color: i===s.slashIndex&&blueSel?'#fff':'var(--text)' } }));
+    const compChips = s.comp ? s.comp.matches.map((n,i)=>({ nick:n, style:{ fontSize:'12px', padding:'2px 9px', borderRadius:'11px', background: i===s.comp.idx?'var(--accent)':'var(--field)', color: i===s.comp.idx?(blueSel?'#fff':'var(--text)'):'var(--text2)', border:'1px solid var(--field-border)' } })) : null;
+
+    // quick switcher
+    const ql=this.quickList();
+    const quickResults=ql.map((q,i)=>({ id:q.id, name:q.name, net:q.net, isDm:q.kind==='dm', initial:(q.name[0]||'?').toUpperCase(),
+      avatarStyle:{ width:'22px',height:'22px',borderRadius: q.kind==='dm'?'50%':'6px', display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:600,color:'#fff',flexShrink:0,background: q.kind==='dm'?this.nickColor(q.name):'var(--accent)' },
+      pick:()=>{ this.select(q.id); this.closeQuick(); },
+      style:{ display:'flex', alignItems:'center', gap:'11px', padding:'9px 11px', borderRadius:'9px', cursor:'default', background: i===s.quickIndex?(blueSel?'var(--accent)':'var(--sel)'):'transparent', color: i===s.quickIndex&&blueSel?'#fff':'var(--text)' },
+      netStyle:{ marginLeft:'auto', fontSize:'11px', color: i===s.quickIndex&&blueSel?'rgba(255,255,255,.7)':'var(--text3)' } }));
+    const quickEmpty = quickResults.length===0;
+
+    // ctx menu
+    const ctxStyle = s.ctxMenu ? { position:'fixed', left:Math.min(s.ctxMenu.x, (window.innerWidth||1400)-210)+'px', top:s.ctxMenu.y+'px',
+      background:'var(--pop)', border:'1px solid var(--field-border)', borderRadius:'9px', padding:'5px', minWidth:'196px',
+      boxShadow:'0 18px 50px rgba(0,0,0,.4)', zIndex:61 } : null;
+    if(s.ctxMenu){ s.ctxMenu.items.forEach(it=>{ it.style={ padding:'7px 10px', borderRadius:'6px', cursor:'default', fontSize:'13px', color: it.danger?'#ff453a':'var(--text)' }; }); }
+
+    return {
+      rootStyle, desktopStyle, theme:s.theme, themeIcon: dark?'☀':'☾',
+      sidebarOpen:s.sidebarOpen, memberListOpen:s.memberListOpen,
+      sidebarStyle:{ width: s.sidebarOpen?'230px':'0px', flexShrink:0, background:'var(--sidebar)', borderRight: s.sidebarOpen?'1px solid var(--sep)':'none', overflowY:'auto', overflowX:'hidden', transition:'width .18s ease' },
+      sidebarHeadStyle:{ width:'230px', flexShrink:0, display:'flex', alignItems:'center', borderRight:'1px solid var(--sep)' },
+      navNetworks, headerName, headerSub, headerAvatar, isChannel,
+      showTopicBar, topicText, topicEmpty: !cur.topic, editingTopic:s.editingTopic, notEditingTopic:!s.editingTopic, topicDraft:s.topicDraft,
+      searchOpen:s.searchOpen, search:s.search, searchRef:this.searchRef,
+      connecting, offline, liveContent, connectName:curNet.name, connectLines:s.connectLines,
+      connectNet:()=>this.connectNet(curNet.id),
+      rows, scrollRef:this.scrollRef, onScroll:this.onScroll,
+      showJump: !s.atBottom && liveContent,
+      showMembers, memberCount: cur.memberCount, hasOps:opGroup.length>0, hasVoice:voiceGroup.length>0, hasReg:regGroup.length>0,
+      opGroup, voiceGroup, regGroup, opLabel:'Operators — '+opGroup.length, voiceLabel:'Voiced — '+voiceGroup.length, regLabel:'Members — '+regGroup.length,
+      draft:s.draft, composerRef:this.composerRef, onDraftChange:this.onDraftChange, onComposerKey:this.onComposerKey, sendClick:()=>this.send(),
+      composerPlaceholder: cur.kind==='dm'?('Message '+cur.name):cur.kind==='server'?'Type a command…':('Message '+cur.name),
+      slashOpen:s.slashOpen, slashList, comp: !!compChips, compChips,
+      quickOpen:s.quickOpen, quickQuery:s.quickQuery, quickRef:this.quickRef, onQuickChange:this.onQuickChange, onQuickKey:this.onQuickKey,
+      quickResults, quickEmpty, closeQuick:this.closeQuick, stop:this.stop, openQuick:this.openQuick,
+      ctxMenu:s.ctxMenu, ctxStyle, closeCtx:this.closeCtx,
+      startEditTopic:this.startEditTopic, onTopicChange:this.onTopicChange, onTopicKey:this.onTopicKey, commitTopic:this.commitTopic, topicRef:this.topicRef,
+      onSearchChange:this.onSearchChange, closeSearch:this.closeSearch, openSearch:this.openSearch,
+      toggleTheme:this.toggleTheme, toggleSidebar:this.toggleSidebar, toggleMemberList:this.toggleMemberList, jumpBottom:this.jumpBottom,
+    };
+  }
+}
+</script>
+</body>
+</html>

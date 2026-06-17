@@ -1,0 +1,213 @@
+import Foundation
+import Network
+
+/// Live IRC client over a raw TLS TCP socket using Network.framework.
+///
+/// Transport, framing and protocol parsing live inside this dedicated actor so
+/// they never touch the main actor. It emits the same `IRCEvent` stream the
+/// `MockIRCService` does, so the view model cannot tell them apart.
+///
+/// NOTE: This is the production transport. The app currently boots with
+/// `MockIRCService` (see `AppModel.init`). Swapping is the one-line change:
+///
+///     let client: IRCClient = LiveIRCClient(host: "irc.undernet.org", port: 6697)
+///
+actor LiveIRCClient: IRCClient {
+
+    private let host: NWEndpoint.Host
+    private let port: NWEndpoint.Port
+    private let networkID: String
+    private var connection: NWConnection?
+    private var buffer = Data()
+    private var nick: String
+
+    private var continuation: AsyncStream<IRCEvent>.Continuation?
+    nonisolated let events: AsyncStream<IRCEvent>
+
+    init(networkID: String, host: String, port: UInt16, nick: String) {
+        self.networkID = networkID
+        self.host = NWEndpoint.Host(host)
+        self.port = NWEndpoint.Port(rawValue: port)!
+        self.nick = nick
+        var cont: AsyncStream<IRCEvent>.Continuation!
+        self.events = AsyncStream { cont = $0 }
+        self.continuation = cont
+    }
+
+    // MARK: Connection lifecycle
+
+    func connect(networkID: String) async {
+        emit(.stateChanged(networkID: networkID, .connecting))
+
+        let tls = NWProtocolTLS.Options()
+        let params = NWParameters(tls: tls, tcp: .init())
+        let conn = NWConnection(host: host, port: port, using: params)
+        self.connection = conn
+
+        conn.stateUpdateHandler = { [weak self] state in
+            guard let self else { return }
+            Task { await self.handleState(state) }
+        }
+        receiveLoop(on: conn)
+        conn.start(queue: .global(qos: .userInitiated))
+    }
+
+    private func handleState(_ state: NWConnection.State) {
+        switch state {
+        case .ready:
+            // TLS up — register.
+            emit(.stateChanged(networkID: networkID, .registering))
+            rawSend(IRCParser.serialize(command: "CAP", params: ["LS", "302"]))
+            rawSend(IRCParser.serialize(command: "NICK", params: [nick]))
+            rawSend(IRCParser.serialize(command: "USER", params: [nick, "0", "*", nick]))
+            // SASL (PLAIN) would proceed here via CAP REQ :sasl / AUTHENTICATE.
+        case .failed, .cancelled:
+            emit(.stateChanged(networkID: networkID, .disconnected))
+        default:
+            break
+        }
+    }
+
+    private func receiveLoop(on conn: NWConnection) {
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+            if let data, !data.isEmpty {
+                Task { await self.ingest(data) }
+            }
+            if error == nil && !isComplete {
+                Task { await self.continueReceive() }
+            } else {
+                Task { await self.emitDisconnect() }
+            }
+        }
+    }
+
+    private func continueReceive() { if let c = connection { receiveLoop(on: c) } }
+    private func emitDisconnect() { emit(.stateChanged(networkID: networkID, .disconnected)) }
+
+    // MARK: Framing — split on CRLF, parse each line
+
+    private func ingest(_ data: Data) {
+        buffer.append(data)
+        while let range = buffer.range(of: Data([0x0D, 0x0A])) {  // \r\n
+            let lineData = buffer.subdata(in: buffer.startIndex..<range.lowerBound)
+            buffer.removeSubrange(buffer.startIndex..<range.upperBound)
+            if let line = String(data: lineData, encoding: .utf8) {
+                handle(line)
+            }
+        }
+    }
+
+    private func handle(_ line: String) {
+        guard let msg = IRCParser.parse(line) else { return }
+
+        // Always answer PING to stay connected.
+        if msg.command == "PING" {
+            rawSend(IRCParser.serialize(command: "PONG", params: msg.params))
+            return
+        }
+
+        switch msg.command {
+        case "001":
+            emit(.stateChanged(networkID: networkID, .connected))
+            emit(.serverLine(networkID: networkID, text: msg.trailing ?? "Welcome"))
+        case "PRIVMSG":
+            guard let target = msg.params.first, let body = msg.trailing else { break }
+            let convID = "\(networkID)/\(target.hasPrefix("#") ? target : (msg.sourceNick ?? target))"
+            // CTCP ACTION → /me
+            if body.hasPrefix("\u{01}ACTION ") {
+                let action = body.dropFirst(8).dropLast()
+                emit(.message(conversationID: convID,
+                              Message(id: UUID().uuidString, kind: .action,
+                                      nick: msg.sourceNick ?? "", text: String(action))))
+            } else {
+                emit(.message(conversationID: convID,
+                              Message(id: UUID().uuidString, kind: .message,
+                                      nick: msg.sourceNick ?? "", text: body)))
+            }
+        case "NOTICE":
+            guard let target = msg.params.first, let body = msg.trailing else { break }
+            let convID = "\(networkID)/\(target)"
+            emit(.message(conversationID: convID,
+                          Message(id: UUID().uuidString, kind: .notice,
+                                  nick: msg.sourceNick ?? "*", text: body)))
+        case "JOIN":
+            if let chan = msg.params.first, let nick = msg.sourceNick {
+                emit(.memberJoined(conversationID: "\(networkID)/\(chan)",
+                                   Member(nick: nick)))
+            }
+        case "PART", "QUIT":
+            if let nick = msg.sourceNick {
+                let chan = msg.params.first ?? ""
+                emit(.memberLeft(conversationID: "\(networkID)/\(chan)",
+                                 nick: nick, reason: msg.trailing ?? "",
+                                 kind: msg.command == "PART" ? .part : .quit))
+            }
+        case "TOPIC", "332":
+            if let chan = msg.params.dropFirst(msg.command == "332" ? 1 : 0).first,
+               let topic = msg.trailing {
+                emit(.topic(conversationID: "\(networkID)/\(chan)", topic))
+            }
+        case "NICK":
+            if let from = msg.sourceNick, let to = msg.trailing {
+                emit(.nickChanged(networkID: networkID, from: from, to: to))
+            }
+        default:
+            // Numerics and the rest land in the server console.
+            if Int(msg.command) != nil, let t = msg.trailing {
+                emit(.serverLine(networkID: networkID, text: t))
+            }
+        }
+    }
+
+    // MARK: Sending
+
+    private func rawSend(_ s: String) {
+        connection?.send(content: s.data(using: .utf8), completion: .contentProcessed { _ in })
+    }
+
+    func disconnect(networkID: String) async {
+        connection?.cancel()
+        connection = nil
+        emit(.stateChanged(networkID: networkID, .disconnected))
+    }
+
+    func send(text: String, to conversationID: String) async {
+        let target = String(conversationID.split(separator: "/").last ?? "")
+        rawSend(IRCParser.serialize(command: "PRIVMSG", params: [target, text]))
+    }
+    func sendAction(_ action: String, to conversationID: String) async {
+        let target = String(conversationID.split(separator: "/").last ?? "")
+        rawSend(IRCParser.serialize(command: "PRIVMSG", params: [target, "\u{01}ACTION \(action)\u{01}"]))
+    }
+    func join(channel: String, networkID: String) async {
+        rawSend(IRCParser.serialize(command: "JOIN", params: [channel]))
+    }
+    func part(conversationID: String) async {
+        let target = String(conversationID.split(separator: "/").last ?? "")
+        rawSend(IRCParser.serialize(command: "PART", params: [target]))
+    }
+    func setTopic(_ topic: String, conversationID: String) async {
+        let target = String(conversationID.split(separator: "/").last ?? "")
+        rawSend(IRCParser.serialize(command: "TOPIC", params: [target, topic]))
+    }
+    func changeNick(_ nick: String, networkID: String) async {
+        self.nick = nick
+        rawSend(IRCParser.serialize(command: "NICK", params: [nick]))
+    }
+    func whois(nick: String, conversationID: String) async {
+        rawSend(IRCParser.serialize(command: "WHOIS", params: [nick]))
+    }
+    func setMode(_ mode: MemberMode, nick: String, conversationID: String) async {
+        let target = String(conversationID.split(separator: "/").last ?? "")
+        let flag = mode == .op ? "+o" : "+v"
+        rawSend(IRCParser.serialize(command: "MODE", params: [target, flag, nick]))
+    }
+    func kick(nick: String, conversationID: String) async {
+        let target = String(conversationID.split(separator: "/").last ?? "")
+        rawSend(IRCParser.serialize(command: "KICK", params: [target, nick]))
+    }
+
+    // MARK: Emit helper
+    private func emit(_ event: IRCEvent) { continuation?.yield(event) }
+}
