@@ -8,15 +8,16 @@ struct SidebarView: View {
 
     var body: some View {
         @Bindable var model = model
-        List(selection: Binding(
+        List(selection: Binding<String?>(
             get: { model.selectedID },
             set: { if let id = $0 { model.select(id) } })
         ) {
+            if model.networks.isEmpty {
+                Text("No networks. Add one in Settings (⌘,).")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
             ForEach(model.networks) { net in
-                Section(isExpanded: Binding(
-                    get: { net.isExpanded },
-                    set: { _ in model.toggleNetwork(net.id) })
-                ) {
+                Section {
                     ForEach(net.conversationIDs.compactMap { model.conversations[$0] }) { conv in
                         ConversationRow(conv: conv)
                             .tag(conv.id)
@@ -27,7 +28,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .top, spacing: 0) { EmptyView() }
     }
 }
 
@@ -50,6 +50,13 @@ private struct NetworkHeader: View {
                     .textCase(.none)
             }
             Spacer()
+            Button(network.state == .disconnected ? "Connect" : "Disconnect") {
+                if network.state == .disconnected { model.connect(network.id) }
+                else { model.disconnect(network.id) }
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 10))
+            .textCase(.none)
         }
         .contentShape(Rectangle())
         .onTapGesture { model.select(network.serverConsoleID) }
