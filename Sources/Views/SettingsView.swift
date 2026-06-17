@@ -45,6 +45,14 @@ private struct ConnectionsSettings: View {
                     }
                     .disabled(selection == nil)
                     Spacer()
+                    if model.hasDemoNetworks {
+                        Button("Remove Demo Networks") {
+                            model.removeDemoData()
+                            selection = model.serverConfigs.first?.id
+                        }
+                        .controlSize(.small)
+                        .help("Delete the built-in Undernet/EFnet/Libera demo data permanently")
+                    }
                 }
                 .buttonStyle(.borderless)
                 .padding(.horizontal, 6).padding(.vertical, 3)

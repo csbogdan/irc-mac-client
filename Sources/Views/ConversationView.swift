@@ -86,16 +86,20 @@ struct ConversationView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                 }
+                // Visibility of this anchor tells us whether the user is parked
+                // at the bottom — follow only happens then.
                 Color.clear.frame(height: 1)
                     .listRowInsets(EdgeInsets())
                     .listRowSeparator(.hidden)
                     .id("BOTTOM")
+                    .onAppear { atBottom = true }
+                    .onDisappear { atBottom = false }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
-                    Button { withAnimation { proxy.scrollTo("BOTTOM") } } label: {
+                    Button { atBottom = true; withAnimation { proxy.scrollTo("BOTTOM") } } label: {
                         Label("Jump to latest", systemImage: "arrow.down")
                             .font(.system(size: 12, weight: .medium))
                     }
@@ -104,9 +108,13 @@ struct ConversationView: View {
                 }
             }
             .onChange(of: conv?.messages.count) { _, _ in
+                // Only follow new messages if you're already at the bottom.
                 if atBottom { withAnimation { proxy.scrollTo("BOTTOM") } }
             }
-            .onChange(of: model.selectedID) { _, _ in proxy.scrollTo("BOTTOM") }
+            .onChange(of: model.selectedID) { _, _ in
+                atBottom = true
+                proxy.scrollTo("BOTTOM")
+            }
         }
     }
 

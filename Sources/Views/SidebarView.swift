@@ -43,6 +43,14 @@ private struct NetworkHeader: View {
                 .opacity(network.state.isBusy ? 0.6 : 1)
             Text(network.name.uppercased())
                 .font(.system(size: 11, weight: .bold))
+            if model.isDemo(network.id) {
+                Text("DEMO")
+                    .font(.system(size: 8, weight: .bold))
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(Capsule().fill(.orange.opacity(0.25)))
+                    .foregroundStyle(.orange)
+                    .textCase(.none)
+            }
             if !network.state.label.isEmpty {
                 Text(network.state.label)
                     .font(.system(size: 10))

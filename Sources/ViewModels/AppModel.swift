@@ -21,10 +21,10 @@ final class AppModel {
 
     static let selfNickPlaceholder = "mcimpeanu"
 
-    // MARK: World state
-    var networks: [Network] = MockIRCService.seedNetworks()
-    var conversations: [String: Conversation] = MockIRCService.seedConversations()
-    var selectedID: String = "undernet/#coder-com"
+    // MARK: World state (built from serverConfigs in buildWorld)
+    var networks: [Network] = []
+    var conversations: [String: Conversation] = [:]
+    var selectedID: String = ""
 
     // MARK: UI state
     var sidebarVisible = true
@@ -44,9 +44,34 @@ final class AppModel {
 
     init() {
         loadServers()
+        buildWorld()
         loadCustomArt()
         Task { await consumeEvents() }
         startAutoConnect()
+    }
+
+    /// Build the runtime networks/conversations from `serverConfigs`. Demo
+    /// (mock) networks get the rich sample content; live networks start clean
+    /// with just a server console.
+    private func buildWorld() {
+        networks = []
+        conversations = [:]
+        let demoConvs = MockIRCService.seedConversations()
+        let demoNets = Dictionary(uniqueKeysWithValues: MockIRCService.seedNetworks().map { ($0.id, $0) })
+
+        for cfg in serverConfigs {
+            if cfg.useMockTransport, let dn = demoNets[cfg.id] {
+                networks.append(dn)
+                let consoleID = dn.serverConsoleID
+                conversations[consoleID] = demoConvs[consoleID] ?? Conversation(id: consoleID, kind: .server, name: cfg.name)
+                for cid in dn.conversationIDs { if let c = demoConvs[cid] { conversations[cid] = c } }
+            } else {
+                ensureNetwork(for: cfg)
+            }
+        }
+        selectedID = networks.flatMap(\.conversationIDs)
+            .first { conversations[$0]?.kind == .channel }
+            ?? networks.first?.serverConsoleID ?? ""
     }
 
     // MARK: Derived
@@ -330,11 +355,11 @@ final class AppModel {
 
     private func loadServers() {
         if let data = UserDefaults.standard.data(forKey: AppModel.serversKey),
-           let decoded = try? JSONDecoder().decode([ServerConfig].self, from: data),
-           !decoded.isEmpty {
-            serverConfigs = decoded
+           let decoded = try? JSONDecoder().decode([ServerConfig].self, from: data) {
+            serverConfigs = decoded            // respect saved list, even if empty
         } else {
             serverConfigs = AppModel.seedServerConfigs()
+            saveServers()                      // persist so we never reseed again
         }
         let configs = serverConfigs
         Task { await hub.updateConfigs(configs) }
@@ -428,14 +453,25 @@ final class AppModel {
 
     func deleteServer(_ id: String) {
         serverConfigs.removeAll { $0.id == id }
-        if let i = networks.firstIndex(where: { $0.id == id }) {
-            for convID in networks[i].conversationIDs { conversations[convID] = nil }
-            networks.remove(at: i)
-        }
+        networks.removeAll { $0.id == id }
+        // Remove every conversation belonging to this network (incl. $server).
+        conversations = conversations.filter { networkID(of: $0.key) != id }
         if network(for: selectedID) == nil {
-            selectedID = networks.first?.conversationIDs.first ?? ""
+            selectedID = networks.first?.conversationIDs.first ?? networks.first?.serverConsoleID ?? ""
         }
         saveServers()
+        Task { [serverConfigs] in await hub.updateConfigs(serverConfigs) }
+    }
+
+    var hasDemoNetworks: Bool { serverConfigs.contains { $0.useMockTransport } }
+    func isDemo(_ networkID: String) -> Bool { config(for: networkID)?.useMockTransport ?? false }
+
+    /// Remove the built-in demo networks (Undernet/EFnet/Libera) and their
+    /// sample conversations — permanently. This is the "turn off mock" action.
+    func removeDemoData() {
+        for id in serverConfigs.filter({ $0.useMockTransport }).map(\.id) {
+            deleteServer(id)
+        }
     }
 
     // MARK: - On-connect automation
