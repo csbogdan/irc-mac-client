@@ -21,6 +21,10 @@ actor LiveIRCClient: IRCClient {
     private var connection: NWConnection?
     private var buffer = Data()
     private var nick: String
+    private let baseNick: String
+    private let altNick: String
+    private var nickAttempt = 0
+    private var registered = false
 
     // Identity / auth, from the server config.
     private let username: String
@@ -39,6 +43,8 @@ actor LiveIRCClient: IRCClient {
         self.port = NWEndpoint.Port(rawValue: config.port > 0 ? UInt16(config.port) : 6697) ?? 6697
         self.useTLS = config.useTLS
         self.nick = config.nick
+        self.baseNick = config.nick
+        self.altNick = config.altNick
         self.username = config.effectiveUsername
         self.realName = config.realName.isEmpty ? config.nick : config.realName
         self.serverPassword = config.serverPassword
@@ -136,7 +142,21 @@ actor LiveIRCClient: IRCClient {
         case "902", "904", "905", "906", "907", "908":
             emit(.serverLine(networkID: networkID, text: "*** SASL: \(msg.trailing ?? "authentication failed")"))
             rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))
+        case "433", "436", "437":   // nick in use / collision / unavailable
+            guard !registered else { break }
+            let old = nick
+            nick = nextNick()
+            emit(.serverLine(networkID: networkID, text: "*** Nick \"\(old)\" is taken — trying \"\(nick)\""))
+            rawSend(IRCParser.serialize(command: "NICK", params: [nick]))
+            emit(.nickChanged(networkID: networkID, from: old, to: nick))
+        case "432":                 // erroneous nickname
+            guard !registered else { break }
+            let old = nick
+            nick = "Relay\(abs(old.hashValue) % 100000)"
+            rawSend(IRCParser.serialize(command: "NICK", params: [nick]))
+            emit(.nickChanged(networkID: networkID, from: old, to: nick))
         case "001":
+            registered = true
             emit(.stateChanged(networkID: networkID, .connected))
             emit(.serverLine(networkID: networkID, text: msg.trailing ?? "Welcome"))
         case "PRIVMSG":
@@ -195,6 +215,15 @@ actor LiveIRCClient: IRCClient {
                 emit(.serverLine(networkID: networkID, text: t))
             }
         }
+    }
+
+    /// Next nick to try on a collision: the configured alternate first, then the
+    /// base nick with growing underscores, then a numeric suffix.
+    private func nextNick() -> String {
+        nickAttempt += 1
+        if nickAttempt == 1, !altNick.isEmpty, altNick != baseNick { return altNick }
+        if nickAttempt <= 3 { return baseNick + String(repeating: "_", count: nickAttempt) }
+        return baseNick + "\(nickAttempt)"
     }
 
     // MARK: CAP / SASL negotiation

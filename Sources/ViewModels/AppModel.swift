@@ -36,7 +36,7 @@ final class AppModel {
 
     // Persisted server configurations — the durable records behind `networks`.
     var serverConfigs: [ServerConfig] = []
-    private static let serversKey = "relay.serverConfigs.v2"
+    private static let serversKey = "relay.serverConfigs.v3"
 
     // User-defined ASCII art (persisted), shown alongside the built-in catalog.
     var customArt: [ArtLine] = []
@@ -520,7 +520,8 @@ final class AppModel {
         [
             ServerConfig(id: "undernet", name: "Undernet",
                          host: "irc.undernet.org", port: 6667, useTLS: false,
-                         nick: AppModel.selfNickPlaceholder, realName: "Relay")
+                         nick: AppModel.selfNickPlaceholder, realName: "Relay",
+                         connectOnLaunch: true)
         ]
     }
 }
