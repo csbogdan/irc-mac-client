@@ -78,15 +78,21 @@ struct ConversationView: View {
 
     private var scrollback: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { row in
-                        MessageRowView(row: row).id(row.id)
-                    }
-                    Color.clear.frame(height: 1).id("BOTTOM")
+            List {
+                ForEach(rows) { row in
+                    MessageRowView(row: row)
+                        .id(row.id)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
-                .padding(.vertical, 12)
+                Color.clear.frame(height: 1)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .id("BOTTOM")
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
                     Button { withAnimation { proxy.scrollTo("BOTTOM") } } label: {
