@@ -205,7 +205,15 @@ final class AppModel {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         if text.hasPrefix("/") { runCommand(text) }
-        else { Task { await client.send(text: text, to: selectedID) } }
+        else {
+            Task { await client.send(text: text, to: selectedID) }
+            echoOwn(text, kind: .message, to: selectedID)
+        }
+    }
+
+    /// IRC does not echo your own PRIVMSG/NOTICE back, so render it locally.
+    private func echoOwn(_ text: String, kind: MessageKind, to convID: String) {
+        appendMessage(to: convID, Message(id: UUID().uuidString, kind: kind, nick: selfNick, text: text))
     }
 
     private func runCommand(_ text: String) {
@@ -216,7 +224,10 @@ final class AppModel {
         let netID = selectedNetwork?.id ?? ""
 
         switch cmd {
-        case "me":    if !arg.isEmpty { Task { await client.sendAction(arg, to: selectedID) } }
+        case "me":    if !arg.isEmpty {
+            Task { await client.sendAction(arg, to: selectedID) }
+            echoOwn(arg, kind: .action, to: selectedID)
+        }
         case "join":  if !arg.isEmpty { joinChannel(arg) }
         case "part":  partCurrent()
         case "nick":  if let n = rest.first { Task { await client.changeNick(n, networkID: netID) } }
@@ -266,7 +277,10 @@ final class AppModel {
             mutateNetwork(net.id) { $0.conversationIDs.append(id) }
         }
         select(id)
-        if !message.isEmpty { Task { await client.send(text: message, to: id) } }
+        if !message.isEmpty {
+            Task { await client.send(text: message, to: id) }
+            echoOwn(message, kind: .message, to: id)
+        }
     }
 
     func setTopic(_ topic: String, for id: String) { Task { await client.setTopic(topic, conversationID: id) } }
