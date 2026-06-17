@@ -15,6 +15,9 @@ enum IRCEvent {
     case memberJoined(conversationID: String, Member)
     case memberLeft(conversationID: String, nick: String, reason: String, kind: MessageKind)
     case modeChanged(conversationID: String, nick: String, mode: MemberMode)
+    /// A non-member channel mode toggled (i/m/n/t/l/k/…). `arg` carries the
+    /// parameter for +l/+k.
+    case channelModeChanged(conversationID: String, letter: String, enabled: Bool, arg: String?)
     case nickChanged(networkID: String, from: String, to: String)
 }
 

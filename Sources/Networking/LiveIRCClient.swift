@@ -153,6 +153,10 @@ actor LiveIRCClient: IRCClient {
                let topic = msg.trailing {
                 emit(.topic(conversationID: "\(networkID)/\(chan)", topic))
             }
+        case "MODE":
+            handleMode(msg)
+        case "324":   // RPL_CHANNELMODEIS — current modes on join/query
+            handleChannelModeIs(msg)
         case "NICK":
             if let from = msg.sourceNick, let to = msg.trailing {
                 emit(.nickChanged(networkID: networkID, from: from, to: to))
@@ -162,6 +166,61 @@ actor LiveIRCClient: IRCClient {
             if Int(msg.command) != nil, let t = msg.trailing {
                 emit(.serverLine(networkID: networkID, text: t))
             }
+        }
+    }
+
+    // MARK: MODE parsing
+
+    /// Modes whose parameter is consumed from the argument list.
+    private static let paramOnSet: Set<Character> = ["o", "v", "b", "k", "l"]
+    private static let paramOnUnset: Set<Character> = ["o", "v", "b", "k"]
+
+    private func handleMode(_ msg: IRCMessage) {
+        guard let target = msg.params.first else { return }
+        // User mode (target is a nick, not a channel) — not tracked in UI yet.
+        guard target.hasPrefix("#") || target.hasPrefix("&") else { return }
+        let convID = "\(networkID)/\(target)"
+        let tokens = Array(msg.params.dropFirst())
+        guard let modeString = tokens.first else { return }
+        var args = Array(tokens.dropFirst())
+
+        var adding = true
+        for ch in modeString {
+            switch ch {
+            case "+": adding = true
+            case "-": adding = false
+            default:
+                let takesArg = adding ? LiveIRCClient.paramOnSet.contains(ch)
+                                      : LiveIRCClient.paramOnUnset.contains(ch)
+                let arg = takesArg && !args.isEmpty ? args.removeFirst() : nil
+                applyMode(ch, adding: adding, arg: arg, convID: convID)
+            }
+        }
+    }
+
+    private func applyMode(_ ch: Character, adding: Bool, arg: String?, convID: String) {
+        switch ch {
+        case "o":
+            if let nick = arg { emit(.modeChanged(conversationID: convID, nick: nick, mode: adding ? .op : .regular)) }
+        case "v":
+            if let nick = arg { emit(.modeChanged(conversationID: convID, nick: nick, mode: adding ? .voice : .regular)) }
+        case "b":
+            break   // ban list — not modelled in the member list
+        default:
+            emit(.channelModeChanged(conversationID: convID, letter: String(ch), enabled: adding, arg: arg))
+        }
+    }
+
+    /// RPL_CHANNELMODEIS: <client> <#channel> <modestring> [args…]
+    private func handleChannelModeIs(_ msg: IRCMessage) {
+        guard msg.params.count >= 3 else { return }
+        let channel = msg.params[1]
+        let convID = "\(networkID)/\(channel)"
+        var args = Array(msg.params.dropFirst(3))
+        for ch in msg.params[2] where ch != "+" {
+            let takesArg = LiveIRCClient.paramOnSet.contains(ch)
+            let arg = takesArg && !args.isEmpty ? args.removeFirst() : nil
+            applyMode(ch, adding: true, arg: arg, convID: convID)
         }
     }
 

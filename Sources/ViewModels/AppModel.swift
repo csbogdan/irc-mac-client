@@ -111,6 +111,19 @@ final class AppModel {
                 if let i = $0.members.firstIndex(where: { $0.nick == nick }) { $0.members[i].mode = mode }
             }
 
+        case let .channelModeChanged(convID, letter, enabled, arg):
+            mutateConversation(convID) {
+                if enabled {
+                    $0.activeModes.insert(letter)
+                    if letter == "l" { $0.modeLimit = Int(arg ?? "") }
+                    if letter == "k" { $0.modeKey = arg }
+                } else {
+                    $0.activeModes.remove(letter)
+                    if letter == "l" { $0.modeLimit = nil }
+                    if letter == "k" { $0.modeKey = nil }
+                }
+            }
+
         case let .nickChanged(networkID, _, to):
             mutateNetwork(networkID) { $0.nick = to }
         }
