@@ -33,6 +33,11 @@ final class AppModel {
     var searchOpen = false
     var searchText = ""
     var connectingLog: [String] = []
+    var channelModesOpen = false
+    var xSettingsOpen = false
+    var channelListOpen = false
+    var channelList: [ChannelListItem] = []
+    @ObservationIgnored private var whoisTargetConvID: String?
 
     // Persisted server configurations — the durable records behind `networks`.
     var serverConfigs: [ServerConfig] = []
@@ -154,6 +159,23 @@ final class AppModel {
                 }
             }
 
+        case let .channelList(_, items):
+            channelList = items
+            channelListOpen = true
+
+        case let .whois(networkID, text):
+            let cid = whoisTargetConvID ?? "\(networkID)/$server"
+            appendMessage(to: cid, Message(id: UUID().uuidString, kind: .whois, text: text))
+
+        case let .banList(convID, masks):
+            mutateConversation(convID) { $0.bans = masks }
+
+        case let .ban(convID, mask, added):
+            mutateConversation(convID) {
+                if added { if !$0.bans.contains(mask) { $0.bans.append(mask) } }
+                else { $0.bans.removeAll { $0 == mask } }
+            }
+
         case let .nickChanged(networkID, from, to):
             // Update our own nick only if it was ours.
             if networks.first(where: { $0.id == networkID })?.nick == from {
@@ -268,7 +290,13 @@ final class AppModel {
         case "part":  partCurrent()
         case "nick":  if let n = rest.first { Task { await client.changeNick(n, networkID: netID) } }
         case "topic": Task { await client.setTopic(arg, conversationID: selectedID) }
-        case "whois": Task { await client.whois(nick: rest.first ?? selfNick, conversationID: selectedID) }
+        case "whois":
+            whoisTargetConvID = selectedID
+            Task { await client.whois(nick: rest.first ?? selfNick, conversationID: selectedID) }
+        case "list":
+            Task { await client.sendRaw(arg.isEmpty ? "LIST" : "LIST \(arg)", networkID: netID) }
+        case "ban":   if let n = rest.first { banNick(n) }
+        case "unban": if let n = rest.first { unbanNick(n) }
         case "msg", "query":
             if let n = rest.first { openDM(n, message: rest.dropFirst().joined(separator: " ")) }
         case "quit":
@@ -326,7 +354,10 @@ final class AppModel {
     }
 
     func setTopic(_ topic: String, for id: String) { Task { await client.setTopic(topic, conversationID: id) } }
-    func whois(_ nick: String) { Task { await client.whois(nick: nick, conversationID: selectedID) } }
+    func whois(_ nick: String) {
+        whoisTargetConvID = selectedID
+        Task { await client.whois(nick: nick, conversationID: selectedID) }
+    }
     func setMode(_ mode: MemberMode, nick: String) { Task { await client.setMode(mode, nick: nick, conversationID: selectedID) } }
     func kick(_ nick: String) { Task { await client.kick(nick: nick, conversationID: selectedID) } }
     func markRead(_ id: String) { mutateConversation(id) { $0.unread = 0; $0.mentions = 0; $0.firstUnreadID = nil } }
@@ -335,8 +366,19 @@ final class AppModel {
     // MARK: Nick completion (for the composer)
 
     func completions(for token: String) -> [String] {
-        guard !token.isEmpty, let members = selectedConversation?.members else { return [] }
-        return members.map(\.nick).filter { $0.lowercased().hasPrefix(token.lowercased()) }
+        guard !token.isEmpty else { return [] }
+        let q = token.lowercased()
+        // '#'/'&' → complete channel names from the sidebar's channel list.
+        if token.hasPrefix("#") || token.hasPrefix("&") {
+            let chans = networks.flatMap(\.conversationIDs)
+                .compactMap { conversations[$0] }
+                .filter { $0.kind == .channel }
+                .map(\.name)
+            return Array(Set(chans)).filter { $0.lowercased().hasPrefix(q) }.sorted()
+        }
+        // otherwise nick completion from the active channel only
+        guard let members = selectedConversation?.members else { return [] }
+        return members.map(\.nick).filter { $0.lowercased().hasPrefix(q) }
     }
 
     // MARK: - ASCII art
@@ -388,6 +430,38 @@ final class AppModel {
     func sendXUserSet(_ option: String, value: String, networkID: String) {
         Task { await client.sendRaw("PRIVMSG \(AppModel.xBot) :USET \(option) \(value)", networkID: networkID) }
     }
+
+    // MARK: - Bans
+
+    func requestChannelList() {
+        guard let net = selectedNetwork else { return }
+        Task { await client.sendRaw("LIST", networkID: net.id) }
+    }
+
+    /// Ask the server for current modes (324) and the ban list (367/368).
+    func requestChannelInfo(_ convID: String) {
+        guard let conv = conversations[convID], conv.kind == .channel else { return }
+        let netID = networkID(of: convID)
+        Task {
+            await client.sendRaw("MODE \(conv.name)", networkID: netID)
+            await client.sendRaw("MODE \(conv.name) +b", networkID: netID)
+        }
+    }
+
+    func setBan(_ mask: String, enabled: Bool, for convID: String) {
+        guard let conv = conversations[convID], conv.kind == .channel,
+              !mask.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let netID = networkID(of: convID)
+        Task { await client.sendRaw("MODE \(conv.name) \(enabled ? "+" : "-")b \(mask)", networkID: netID) }
+        mutateConversation(convID) {
+            if enabled { if !$0.bans.contains(mask) { $0.bans.append(mask) } }
+            else { $0.bans.removeAll { $0 == mask } }
+        }
+    }
+
+    /// Ban/unban a nick (as nick!*@*) in the current or given channel.
+    func banNick(_ nick: String, for convID: String? = nil) { setBan("\(nick)!*@*", enabled: true, for: convID ?? selectedID) }
+    func unbanNick(_ nick: String, for convID: String? = nil) { setBan("\(nick)!*@*", enabled: false, for: convID ?? selectedID) }
 
     // MARK: - Server configuration: persistence
 
@@ -441,7 +515,8 @@ final class AppModel {
     /// Called by the settings editor after any edit: keep runtime networks in
     /// sync with the configs and persist.
     func serversChanged() {
-        for cfg in serverConfigs { ensureNetwork(for: cfg) }
+        // Lightweight: only persist + sync the hub. Mutating `networks` here on
+        // every keystroke stole first-responder from the settings text fields.
         saveServers()
         let configs = serverConfigs
         Task { await hub.updateConfigs(configs) }

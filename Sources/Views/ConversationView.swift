@@ -98,6 +98,9 @@ struct ConversationView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .simultaneousGesture(TapGesture(count: 2).onEnded {
+                if conv?.kind == .channel { model.channelModesOpen = true }
+            })
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
                     Button { atBottom = true; withAnimation { proxy.scrollTo("BOTTOM") } } label: {

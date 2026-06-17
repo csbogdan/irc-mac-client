@@ -79,7 +79,8 @@ private struct MemberRow: View {
             Button("Give Voice (+v)") { model.setMode(.voice, nick: member.nick) }
             Divider()
             Button("Kick \(member.nick)", role: .destructive) { model.kick(member.nick) }
-            Button("Ignore \(member.nick)", role: .destructive) { }
+            Button("Ban \(member.nick)", role: .destructive) { model.banNick(member.nick) }
+            Button("Unban \(member.nick)") { model.unbanNick(member.nick) }
         }
     }
 }

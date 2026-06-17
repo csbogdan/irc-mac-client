@@ -7,6 +7,8 @@ struct ChannelModesView: View {
     @Environment(\.dismiss) private var dismiss
 
     private var conv: Conversation? { model.selectedConversation }
+    @State private var topicText = ""
+    @State private var banText = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,6 +16,13 @@ struct ChannelModesView: View {
             Divider()
             if let conv, conv.kind == .channel {
                 Form {
+                    Section("Topic") {
+                        TextField("Channel topic", text: $topicText, axis: .vertical)
+                            .lineLimit(1...4)
+                            .onAppear { topicText = conv.topic }
+                        Button("Set Topic") { model.setTopic(topicText, for: conv.id) }
+                            .disabled(topicText == conv.topic)
+                    }
                     Section("Flags") {
                         ForEach(Undernet.editableChannelModes.filter { $0.param == .none }) { mode in
                             Toggle(isOn: binding(for: mode, in: conv)) {
@@ -25,8 +34,10 @@ struct ChannelModesView: View {
                         limitRow(conv)
                         keyRow(conv)
                     }
+                    bansSection(conv)
                 }
                 .formStyle(.grouped)
+                .onAppear { model.requestChannelInfo(conv.id) }
             } else {
                 ContentUnavailableView("Not a Channel", systemImage: "number",
                                        description: Text("Select a channel to edit its modes."))
@@ -42,6 +53,37 @@ struct ChannelModesView: View {
             Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
         }
         .padding(14)
+    }
+
+    @ViewBuilder private func bansSection(_ conv: Conversation) -> some View {
+        Section("Bans (\(conv.bans.count))") {
+            if conv.bans.isEmpty {
+                Text("No bans set.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(conv.bans, id: \.self) { mask in
+                HStack {
+                    Text(mask).font(.system(size: 12, design: .monospaced))
+                    Spacer()
+                    Button { model.setBan(mask, enabled: false, for: conv.id) } label: {
+                        Image(systemName: "minus.circle.fill")
+                    }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                }
+            }
+            HStack {
+                TextField("nick!user@host", text: $banText)
+                    .font(.system(size: 12, design: .monospaced))
+                    .onSubmit { addBan(conv) }
+                Button("Ban", action: { addBan(conv) })
+                    .disabled(banText.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    private func addBan(_ conv: Conversation) {
+        let mask = banText.trimmingCharacters(in: .whitespaces)
+        guard !mask.isEmpty else { return }
+        model.setBan(mask, enabled: true, for: conv.id)
+        banText = ""
     }
 
     private func row(_ mode: ChannelMode) -> some View {

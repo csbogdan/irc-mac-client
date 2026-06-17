@@ -126,12 +126,22 @@ struct Conversation: Identifiable, Hashable {
     var activeModes: Set<String> = []
     var modeLimit: Int? = nil
     var modeKey: String? = nil
+    var bans: [String] = []
 
     var memberCount: Int { kind == .channel ? max(members.count, declaredMemberCount) : 0 }
     var declaredMemberCount: Int = 0
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
     func hash(into h: inout Hasher) { h.combine(id) }
+}
+
+// MARK: - Channel list (/list results)
+
+struct ChannelListItem: Identifiable, Hashable, Sendable {
+    var id: String { name }
+    var name: String
+    var users: Int
+    var topic: String
 }
 
 // MARK: - Network

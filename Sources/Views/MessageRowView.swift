@@ -85,6 +85,7 @@ struct MessageRowView: View {
         .contextMenu {
             Button("Whois \(m.nick)") { model.whois(m.nick) }
             Button("Message \(m.nick)") { model.openDM(m.nick) }
+            Button("Ban \(m.nick)", role: .destructive) { model.banNick(m.nick) }
             Menu("Send ASCII Art") { ArtMenu { model.sendArt($0, toNick: m.nick) } }
             Divider()
             Button("Copy Message") {

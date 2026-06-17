@@ -26,6 +26,31 @@ actor LiveIRCClient: IRCClient {
     private var nickAttempt = 0
     private var registered = false
     private var namesBuffer: [String: [Member]] = [:]   // channel → names accumulated across 353s
+    private var banBuffer: [String: [String]] = [:]     // channel → ban masks accumulated across 367s
+    private var listBuffer: [ChannelListItem] = []      // accumulated /list results
+
+    /// Format a WHOIS numeric into a human-readable line.
+    private func formatWhois(_ msg: IRCMessage) -> String {
+        let p = msg.params
+        let who = p.count > 1 ? p[1] : ""
+        switch msg.command {
+        case "311": // <me> <nick> <user> <host> * :<real>
+            let user = p.count > 2 ? p[2] : "", host = p.count > 3 ? p[3] : ""
+            return "\(who) is \(user)@\(host) (\(msg.trailing ?? ""))"
+        case "312": return "\(who) on \(p.count > 2 ? p[2] : "") (\(msg.trailing ?? ""))"
+        case "313": return "\(who) is an IRC operator"
+        case "317": // <me> <nick> <idle> <signon> :seconds idle, signon time
+            let idle = p.count > 2 ? p[2] : ""
+            return "\(who) has been idle \(idle)s"
+        case "319": return "\(who) on channels: \(msg.trailing ?? "")"
+        case "330": return "\(who) \(msg.trailing ?? "is logged in as") \(p.count > 2 ? p[2] : "")"
+        case "338": return "\(who) actual host: \(p.dropFirst(2).joined(separator: " ")) \(msg.trailing ?? "")"
+        case "301": return "\(who) is away: \(msg.trailing ?? "")"
+        case "671": return "\(who) is using a secure connection"
+        case "318": return "End of /WHOIS for \(who)"
+        default:    return msg.trailing ?? msg.params.dropFirst().joined(separator: " ")
+        }
+    }
 
     /// Parse a NAMES token like "@nick", "+nick", "~nick" into a Member with mode.
     private static func parseMember(_ token: Substring) -> Member {
@@ -252,6 +277,27 @@ actor LiveIRCClient: IRCClient {
                 emit(.members(conversationID: "\(networkID)/\(chan)", namesBuffer[chan] ?? []))
                 namesBuffer[chan] = nil
             }
+        case "367":   // RPL_BANLIST: <me> <#chan> <mask> [setter] [time]
+            if msg.params.count >= 3 {
+                banBuffer[msg.params[1], default: []].append(msg.params[2])
+            }
+        case "368":   // RPL_ENDOFBANLIST
+            if let chan = msg.params.dropFirst().first {
+                emit(.banList(conversationID: "\(networkID)/\(chan)", masks: banBuffer[chan] ?? []))
+                banBuffer[chan] = nil
+            }
+        case "321": listBuffer = []                       // RPL_LISTSTART
+        case "322":                                        // RPL_LIST: <me> <#chan> <count> :<topic>
+            if msg.params.count >= 3 {
+                listBuffer.append(ChannelListItem(name: msg.params[1],
+                                                  users: Int(msg.params[2]) ?? 0,
+                                                  topic: msg.trailing ?? ""))
+            }
+        case "323":                                        // RPL_LISTEND
+            emit(.channelList(networkID: networkID, items: listBuffer))
+            listBuffer = []
+        case "311", "312", "313", "317", "318", "319", "330", "338", "301", "671", "276", "275":
+            emit(.whois(networkID: networkID, text: formatWhois(msg)))
         case "MODE":
             handleMode(msg)
         case "324":   // RPL_CHANNELMODEIS — current modes on join/query
@@ -347,7 +393,7 @@ actor LiveIRCClient: IRCClient {
         case "v":
             if let nick = arg { emit(.modeChanged(conversationID: convID, nick: nick, mode: adding ? .voice : .regular)) }
         case "b":
-            break   // ban list — not modelled in the member list
+            if let mask = arg { emit(.ban(conversationID: convID, mask: mask, added: adding)) }
         default:
             emit(.channelModeChanged(conversationID: convID, letter: String(ch), enabled: adding, arg: arg))
         }

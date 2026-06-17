@@ -16,10 +16,18 @@ enum IRCEvent {
     case memberLeft(conversationID: String, nick: String, reason: String, kind: MessageKind)
     /// A user quit the network entirely — remove from every channel they're in.
     case userQuit(networkID: String, nick: String, reason: String)
+    /// Result of a /list (delivered as a batch on RPL_LISTEND).
+    case channelList(networkID: String, items: [ChannelListItem])
+    /// A formatted WHOIS reply line, routed to the requesting conversation.
+    case whois(networkID: String, text: String)
     case modeChanged(conversationID: String, nick: String, mode: MemberMode)
     /// A non-member channel mode toggled (i/m/n/t/l/k/…). `arg` carries the
     /// parameter for +l/+k.
     case channelModeChanged(conversationID: String, letter: String, enabled: Bool, arg: String?)
+    /// Full ban list for a channel (from RPL_BANLIST 367/368).
+    case banList(conversationID: String, masks: [String])
+    /// A single ban added/removed live (MODE +b / -b).
+    case ban(conversationID: String, mask: String, added: Bool)
     case nickChanged(networkID: String, from: String, to: String)
 }
 
