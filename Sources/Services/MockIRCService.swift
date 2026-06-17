@@ -15,6 +15,19 @@ final class MockIRCService: IRCClient, @unchecked Sendable {
         self.events = AsyncStream(bufferingPolicy: .unbounded) { cont = $0 }
         self.continuation = cont
         startChatter()
+        demoCTCP()
+    }
+
+    /// Show the CTCP behaviour offline: a couple of incoming requests and our
+    /// silly replies land in the server console.
+    private func demoCTCP() {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            self?.emit(.serverLine(networkID: "undernet", text: "[CTCP] VERSION from ozric → \(CTCP.versionReply)"))
+            try? await Task.sleep(for: .seconds(2))
+            let pong = CTCP.reply(to: "PING", argument: "1700000000", seed: 5) ?? ""
+            self?.emit(.serverLine(networkID: "undernet", text: "[CTCP] PING from nyx → \(pong)"))
+        }
     }
 
     deinit { chatterTimer?.invalidate() }

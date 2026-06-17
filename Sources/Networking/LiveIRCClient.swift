@@ -114,6 +114,11 @@ actor LiveIRCClient: IRCClient {
         case "PRIVMSG":
             guard let target = msg.params.first, let body = msg.trailing else { break }
             let convID = "\(networkID)/\(target.hasPrefix("#") ? target : (msg.sourceNick ?? target))"
+            // CTCP request (e.g. VERSION, PING) — answer via NOTICE, don't render.
+            if body.hasPrefix("\u{01}"), !body.hasPrefix("\u{01}ACTION "), let from = msg.sourceNick {
+                answerCTCP(body: body, from: from)
+                break
+            }
             // CTCP ACTION → /me
             if body.hasPrefix("\u{01}ACTION ") {
                 let action = body.dropFirst(8).dropLast()
@@ -158,6 +163,22 @@ actor LiveIRCClient: IRCClient {
                 emit(.serverLine(networkID: networkID, text: t))
             }
         }
+    }
+
+    // MARK: CTCP
+
+    private var ctcpSeed = 0
+
+    private func answerCTCP(body: String, from nick: String) {
+        let inner = body.trimmingCharacters(in: CharacterSet(charactersIn: "\u{01}"))
+        let parts = inner.split(separator: " ", maxSplits: 1).map(String.init)
+        let cmd = parts.first ?? ""
+        let arg = parts.count > 1 ? parts[1] : ""
+        ctcpSeed &+= 1
+        guard let reply = CTCP.reply(to: cmd, argument: arg, seed: ctcpSeed) else { return }
+        rawSend(IRCParser.serialize(command: "NOTICE",
+                                    params: [nick, "\u{01}\(cmd.uppercased()) \(reply)\u{01}"]))
+        emit(.serverLine(networkID: networkID, text: "[CTCP] \(cmd.uppercased()) from \(nick) → \(reply)"))
     }
 
     // MARK: Sending
