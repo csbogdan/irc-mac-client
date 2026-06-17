@@ -45,14 +45,6 @@ private struct ConnectionsSettings: View {
                     }
                     .disabled(selection == nil)
                     Spacer()
-                    if model.hasDemoNetworks {
-                        Button("Remove Demo Networks") {
-                            model.removeDemoData()
-                            selection = model.serverConfigs.first?.id
-                        }
-                        .controlSize(.small)
-                        .help("Delete the built-in Undernet/EFnet/Libera demo data permanently")
-                    }
                 }
                 .buttonStyle(.borderless)
                 .padding(.horizontal, 6).padding(.vertical, 3)
@@ -225,13 +217,10 @@ private struct ServerEditor: View {
             Section {
                 Toggle("Connect on launch", isOn: $config.connectOnLaunch)
                 Toggle("Reconnect automatically", isOn: $config.autoReconnect)
-                Toggle("Use built-in demo data (offline)", isOn: $config.useMockTransport)
             } header: {
                 Text("Options")
             } footer: {
-                Text(config.useMockTransport
-                     ? "This network is simulated offline — no real connection is made."
-                     : "This network connects to \(config.host):\(String(config.port)) over a real \(config.useTLS ? "TLS" : "TCP") socket.")
+                Text("Connects to \(config.host):\(String(config.port)) over a real \(config.useTLS ? "TLS" : "TCP") socket.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

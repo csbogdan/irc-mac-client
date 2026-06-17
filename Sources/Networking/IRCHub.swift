@@ -1,15 +1,13 @@
 import Foundation
 
-/// Multiplexing transport. Holds one in-memory `MockIRCService` for the curated
-/// demo networks plus a `LiveIRCClient` per real network, and merges all their
-/// event streams into the single stream `AppModel` consumes. Method calls are
-/// routed to the right transport by network. This is what lets a real server
-/// connect over a socket while the demo networks stay fully interactive offline.
+/// Multiplexing transport. Holds one `LiveIRCClient` per network (created lazily
+/// on first use from its `ServerConfig`) and merges all their event streams into
+/// the single stream `AppModel` consumes. Method calls route to the right client
+/// by network.
 actor IRCHub: IRCClient {
     nonisolated let events: AsyncStream<IRCEvent>
     private let continuation: AsyncStream<IRCEvent>.Continuation
 
-    private let mock = MockIRCService()
     private var live: [String: LiveIRCClient] = [:]
     private var configs: [String: ServerConfig] = [:]
 
@@ -17,10 +15,9 @@ actor IRCHub: IRCClient {
         var cont: AsyncStream<IRCEvent>.Continuation!
         self.events = AsyncStream(bufferingPolicy: .unbounded) { cont = $0 }
         self.continuation = cont
-        forward(mock.events)
     }
 
-    /// Keep the hub's view of server configs current (transport choice + creds).
+    /// Keep the hub's view of server configs current (creds, host, …).
     func updateConfigs(_ list: [ServerConfig]) {
         for c in list { configs[c.id] = c }
     }
@@ -30,11 +27,10 @@ actor IRCHub: IRCClient {
         Task { for await event in stream { cont.yield(event) } }
     }
 
-    /// The transport for a network: the live client if the config opts in (and
-    /// it's created lazily), otherwise the shared mock.
+    /// The live client for a network, created lazily from its config.
     private func transport(for networkID: String) -> any IRCClient {
-        guard let cfg = configs[networkID], !cfg.useMockTransport else { return mock }
         if let existing = live[networkID] { return existing }
+        let cfg = configs[networkID] ?? ServerConfig(id: networkID)
         let client = LiveIRCClient(config: cfg)
         live[networkID] = client
         forward(client.events)

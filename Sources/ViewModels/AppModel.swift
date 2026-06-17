@@ -19,7 +19,7 @@ final class AppModel {
     let hub = IRCHub()
     var client: IRCClient { hub }
 
-    static let selfNickPlaceholder = "mcimpeanu"
+    static let selfNickPlaceholder = NSUserName().isEmpty ? "relay" : NSUserName()
 
     // MARK: World state (built from serverConfigs in buildWorld)
     var networks: [Network] = []
@@ -36,7 +36,7 @@ final class AppModel {
 
     // Persisted server configurations — the durable records behind `networks`.
     var serverConfigs: [ServerConfig] = []
-    private static let serversKey = "relay.serverConfigs.v1"
+    private static let serversKey = "relay.serverConfigs.v2"
 
     // User-defined ASCII art (persisted), shown alongside the built-in catalog.
     var customArt: [ArtLine] = []
@@ -50,28 +50,14 @@ final class AppModel {
         startAutoConnect()
     }
 
-    /// Build the runtime networks/conversations from `serverConfigs`. Demo
-    /// (mock) networks get the rich sample content; live networks start clean
-    /// with just a server console.
+    /// Build the runtime networks/conversations from `serverConfigs`. Every
+    /// network starts disconnected with just its server console — real content
+    /// arrives once you connect.
     private func buildWorld() {
         networks = []
         conversations = [:]
-        let demoConvs = MockIRCService.seedConversations()
-        let demoNets = Dictionary(uniqueKeysWithValues: MockIRCService.seedNetworks().map { ($0.id, $0) })
-
-        for cfg in serverConfigs {
-            if cfg.useMockTransport, let dn = demoNets[cfg.id] {
-                networks.append(dn)
-                let consoleID = dn.serverConsoleID
-                conversations[consoleID] = demoConvs[consoleID] ?? Conversation(id: consoleID, kind: .server, name: cfg.name)
-                for cid in dn.conversationIDs { if let c = demoConvs[cid] { conversations[cid] = c } }
-            } else {
-                ensureNetwork(for: cfg)
-            }
-        }
-        selectedID = networks.flatMap(\.conversationIDs)
-            .first { conversations[$0]?.kind == .channel }
-            ?? networks.first?.serverConsoleID ?? ""
+        for cfg in serverConfigs { ensureNetwork(for: cfg) }
+        selectedID = networks.first?.serverConsoleID ?? ""
     }
 
     // MARK: Derived
@@ -463,17 +449,6 @@ final class AppModel {
         Task { [serverConfigs] in await hub.updateConfigs(serverConfigs) }
     }
 
-    var hasDemoNetworks: Bool { serverConfigs.contains { $0.useMockTransport } }
-    func isDemo(_ networkID: String) -> Bool { config(for: networkID)?.useMockTransport ?? false }
-
-    /// Remove the built-in demo networks (Undernet/EFnet/Libera) and their
-    /// sample conversations — permanently. This is the "turn off mock" action.
-    func removeDemoData() {
-        for id in serverConfigs.filter({ $0.useMockTransport }).map(\.id) {
-            deleteServer(id)
-        }
-    }
-
     // MARK: - On-connect automation
 
     /// Run the network's perform list (honouring per-command delays), then —
@@ -540,27 +515,12 @@ final class AppModel {
     // MARK: - Seed configs (match the demo networks)
 
     private static func seedServerConfigs() -> [ServerConfig] {
-        let seeds: [ServerConfig] = [
+        // A single real, connectable Undernet network. No mock, no auto-join —
+        // set your nick, hit Connect.
+        [
             ServerConfig(id: "undernet", name: "Undernet",
-                         host: "Ann-Arbor.MI.US.Undernet.org", port: 6697, useTLS: true,
-                         nick: "mcimpeanu", realName: "Relay",
-                         connectOnLaunch: false, autoReconnect: true,
-                         onConnectCommands: [
-                            PerformCommand(line: "/msg X@channels.undernet.org login mcimpeanu ********", delay: 0)
-                         ],
-                         joinDelay: 2,
-                         autoJoinChannels: ["#coder-com", "#help", "#wasteland", "#zelda"]),
-            ServerConfig(id: "efnet", name: "EFnet",
-                         host: "irc.efnet.org", port: 6697, useTLS: true,
-                         nick: "mci", realName: "Relay",
-                         autoJoinChannels: ["#linux", "#c"]),
-            ServerConfig(id: "libera", name: "Libera.Chat",
-                         host: "irc.libera.chat", port: 6697, useTLS: true,
-                         nick: "m_c", realName: "Relay",
-                         saslEnabled: true, saslAccount: "m_c",
-                         autoJoinChannels: ["#irc"]),
+                         host: "irc.undernet.org", port: 6667, useTLS: false,
+                         nick: AppModel.selfNickPlaceholder, realName: "Relay")
         ]
-        // The curated demo networks use the in-memory transport.
-        return seeds.map { var c = $0; c.useMockTransport = true; return c }
     }
 }
