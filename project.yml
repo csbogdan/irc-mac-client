@@ -1,0 +1,35 @@
+name: IRCClient
+options:
+  bundleIdPrefix: org.cimpeanu
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    GENERATE_INFOPLIST_FILE: YES
+    SWIFT_STRICT_CONCURRENCY: targeted
+    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.social-networking
+    INFOPLIST_KEY_NSHumanReadableCopyright: ""
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  IRCClient:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_NAME: IRC
+        PRODUCT_BUNDLE_IDENTIFIER: org.cimpeanu.IRCClient
+        INFOPLIST_KEY_CFBundleDisplayName: IRC
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_STYLE: Automatic
+    entitlements:
+      path: IRCClient.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
