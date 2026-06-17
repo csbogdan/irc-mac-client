@@ -29,6 +29,10 @@ protocol IRCClient: AnyObject {
     func connect(networkID: String) async
     func disconnect(networkID: String) async
 
+    /// Send a raw IRC protocol line on a network (used by on-connect perform
+    /// commands). Implementations append CRLF as needed.
+    func sendRaw(_ line: String, networkID: String) async
+
     func send(text: String, to conversationID: String) async
     func sendAction(_ action: String, to conversationID: String) async
     func join(channel: String, networkID: String) async

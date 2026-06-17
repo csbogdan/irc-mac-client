@@ -32,8 +32,14 @@ final class AppModel {
     var searchText = ""
     var connectingLog: [String] = []
 
+    // Persisted server configurations — the durable records behind `networks`.
+    var serverConfigs: [ServerConfig] = []
+    private static let serversKey = "relay.serverConfigs.v1"
+
     init() {
+        loadServers()
         Task { await consumeEvents() }
+        startAutoConnect()
     }
 
     // MARK: Derived
@@ -70,8 +76,12 @@ final class AppModel {
     private func apply(_ event: IRCEvent) {
         switch event {
         case let .stateChanged(networkID, state):
+            let was = self.state(of: networkID)
             mutateNetwork(networkID) { $0.state = state }
-            if state == .connected { connectingLog = [] }
+            if state == .connected {
+                connectingLog = []
+                if was != .connected { performOnConnect(networkID) }
+            }
 
         case let .serverLine(networkID, text):
             if state(of: networkID)?.isBusy == true {
@@ -238,5 +248,174 @@ final class AppModel {
     func completions(for token: String) -> [String] {
         guard !token.isEmpty, let members = selectedConversation?.members else { return [] }
         return members.map(\.nick).filter { $0.lowercased().hasPrefix(token.lowercased()) }
+    }
+
+    // MARK: - Server configuration: persistence
+
+    func config(for networkID: String) -> ServerConfig? {
+        serverConfigs.first { $0.id == networkID }
+    }
+
+    private func loadServers() {
+        if let data = UserDefaults.standard.data(forKey: AppModel.serversKey),
+           let decoded = try? JSONDecoder().decode([ServerConfig].self, from: data),
+           !decoded.isEmpty {
+            serverConfigs = decoded
+        } else {
+            serverConfigs = AppModel.seedServerConfigs()
+        }
+    }
+
+    func saveServers() {
+        if let data = try? JSONEncoder().encode(serverConfigs) {
+            UserDefaults.standard.set(data, forKey: AppModel.serversKey)
+        }
+    }
+
+    /// Called by the settings editor after any edit: keep runtime networks in
+    /// sync with the configs and persist.
+    func serversChanged() {
+        for cfg in serverConfigs { ensureNetwork(for: cfg) }
+        saveServers()
+    }
+
+    private func startAutoConnect() {
+        for cfg in serverConfigs where cfg.connectOnLaunch {
+            ensureNetwork(for: cfg)
+            if state(of: cfg.id) != .connected { connect(cfg.id) }
+        }
+    }
+
+    // MARK: - Server configuration: CRUD
+
+    /// Make sure a runtime `Network` (+ server console) exists for a config and
+    /// mirrors its display fields.
+    func ensureNetwork(for cfg: ServerConfig) {
+        if let i = networks.firstIndex(where: { $0.id == cfg.id }) {
+            networks[i].name = cfg.name
+            networks[i].server = cfg.host
+            if networks[i].state == .disconnected { networks[i].nick = cfg.nick }
+        } else {
+            var net = Network(id: cfg.id, name: cfg.name, server: cfg.host,
+                              nick: cfg.nick, state: .disconnected, isExpanded: true,
+                              conversationIDs: [])
+            let consoleID = net.serverConsoleID
+            net.conversationIDs = [consoleID]
+            networks.append(net)
+            if conversations[consoleID] == nil {
+                conversations[consoleID] = Conversation(id: consoleID, kind: .server, name: cfg.name)
+            }
+        }
+    }
+
+    @discardableResult
+    func addServer() -> ServerConfig {
+        var cfg = ServerConfig()
+        cfg.nick = AppModel.selfNickPlaceholder
+        serverConfigs.append(cfg)
+        ensureNetwork(for: cfg)
+        saveServers()
+        return cfg
+    }
+
+    func updateServer(_ cfg: ServerConfig) {
+        guard let i = serverConfigs.firstIndex(where: { $0.id == cfg.id }) else { return }
+        serverConfigs[i] = cfg
+        ensureNetwork(for: cfg)
+        saveServers()
+    }
+
+    func deleteServer(_ id: String) {
+        serverConfigs.removeAll { $0.id == id }
+        if let i = networks.firstIndex(where: { $0.id == id }) {
+            for convID in networks[i].conversationIDs { conversations[convID] = nil }
+            networks.remove(at: i)
+        }
+        if network(for: selectedID) == nil {
+            selectedID = networks.first?.conversationIDs.first ?? ""
+        }
+        saveServers()
+    }
+
+    // MARK: - On-connect automation
+
+    /// Run the network's perform list (honouring per-command delays), then —
+    /// after `joinDelay` — join its auto-join channels.
+    private func performOnConnect(_ networkID: String) {
+        guard let cfg = config(for: networkID) else { return }
+        let nick = networks.first { $0.id == networkID }?.nick ?? cfg.nick
+
+        Task { [weak self] in
+            for cmd in cfg.onConnectCommands {
+                let raw = AppModel.rawLine(from: cmd.line, nick: nick)
+                guard !raw.isEmpty else { continue }
+                if cmd.delay > 0 { try? await Task.sleep(for: .seconds(cmd.delay)) }
+                await self?.client.sendRaw(raw, networkID: networkID)
+            }
+            if cfg.joinDelay > 0 { try? await Task.sleep(for: .seconds(cfg.joinDelay)) }
+            for channel in cfg.autoJoinChannels {
+                await self?.joinOnConnect(channel, networkID: networkID)
+            }
+        }
+    }
+
+    /// Join a channel as part of auto-join without stealing the current selection.
+    private func joinOnConnect(_ name: String, networkID: String) {
+        let chan = name.hasPrefix("#") || name.hasPrefix("&") ? name : "#\(name)"
+        let id = "\(networkID)/\(chan)"
+        if conversations[id] == nil {
+            conversations[id] = Conversation(id: id, kind: .channel, name: chan, members: [])
+            mutateNetwork(networkID) { if !$0.conversationIDs.contains(id) { $0.conversationIDs.append(id) } }
+        }
+        Task { await client.join(channel: chan, networkID: networkID) }
+    }
+
+    /// Translate a perform entry into a raw IRC line. Accepts raw IRC
+    /// (`MODE foo +x`), composer-style slash commands (`/msg X :hi`), and
+    /// substitutes `%nick%`.
+    static func rawLine(from entry: String, nick: String) -> String {
+        var s = entry.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "%nick%", with: nick)
+        guard !s.isEmpty else { return "" }
+        guard s.hasPrefix("/") else { return s }   // already a raw IRC line
+
+        s.removeFirst()
+        let parts = s.split(separator: " ", maxSplits: 1).map(String.init)
+        let cmd = parts.first?.lowercased() ?? ""
+        let rest = parts.count > 1 ? parts[1] : ""
+        switch cmd {
+        case "msg", "query":
+            let sub = rest.split(separator: " ", maxSplits: 1).map(String.init)
+            return sub.count == 2 ? "PRIVMSG \(sub[0]) :\(sub[1])" : "PRIVMSG \(rest)"
+        case "raw", "quote":
+            return rest
+        default:
+            return s   // "command args" → raw line as-is
+        }
+    }
+
+    // MARK: - Seed configs (match the demo networks)
+
+    private static func seedServerConfigs() -> [ServerConfig] {
+        [
+            ServerConfig(id: "undernet", name: "Undernet",
+                         host: "Ann-Arbor.MI.US.Undernet.org", port: 6697, useTLS: true,
+                         nick: "mcimpeanu", realName: "Relay",
+                         connectOnLaunch: false, autoReconnect: true,
+                         onConnectCommands: [
+                            PerformCommand(line: "/msg X@channels.undernet.org login mcimpeanu ********", delay: 0)
+                         ],
+                         joinDelay: 2,
+                         autoJoinChannels: ["#coder-com", "#help", "#wasteland", "#zelda"]),
+            ServerConfig(id: "efnet", name: "EFnet",
+                         host: "irc.efnet.org", port: 6697, useTLS: true,
+                         nick: "mci", realName: "Relay",
+                         autoJoinChannels: ["#linux", "#c"]),
+            ServerConfig(id: "libera", name: "Libera.Chat",
+                         host: "irc.libera.chat", port: 6697, useTLS: true,
+                         nick: "m_c", realName: "Relay",
+                         saslEnabled: true, saslAccount: "m_c",
+                         autoJoinChannels: ["#irc"]),
+        ]
     }
 }

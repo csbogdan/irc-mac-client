@@ -56,6 +56,12 @@ final class MockIRCService: IRCClient, @unchecked Sendable {
 
     // MARK: Outgoing actions — echo back as the appropriate event
 
+    func sendRaw(_ line: String, networkID: String) async {
+        // Surface the executed command in the server console so on-connect
+        // automation is visible in the offline demo.
+        emit(.serverLine(networkID: networkID, text: ">> \(line)"))
+    }
+
     func send(text: String, to conversationID: String) async {
         emit(.message(conversationID: conversationID,
                       Message(id: mid(), kind: .message, nick: AppModel.selfNickPlaceholder, text: text)))

@@ -172,6 +172,10 @@ actor LiveIRCClient: IRCClient {
         emit(.stateChanged(networkID: networkID, .disconnected))
     }
 
+    func sendRaw(_ line: String, networkID: String) async {
+        rawSend(line.hasSuffix("\r\n") ? line : line + "\r\n")
+    }
+
     func send(text: String, to conversationID: String) async {
         let target = String(conversationID.split(separator: "/").last ?? "")
         rawSend(IRCParser.serialize(command: "PRIVMSG", params: [target, text]))
