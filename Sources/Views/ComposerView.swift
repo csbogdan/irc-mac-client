@@ -49,6 +49,15 @@ struct ComposerView: View {
                     .onKeyPress(.downArrow) { slashOpen ? moveSlash(1) : .ignored }
                     .onChange(of: draft) { _, _ in completion = nil; slashIndex = 0 }
 
+                Menu {
+                    ArtMenu { model.sendArt($0) }
+                } label: {
+                    Image(systemName: "paintpalette").foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                }
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).frame(width: 30)
+                .help("Send ASCII art")
+
                 Button { send() } label: {
                     Image(systemName: "arrow.up").fontWeight(.semibold).foregroundStyle(.white)
                         .frame(width: 30, height: 30).background(Circle().fill(Theme.mention))

@@ -73,6 +73,7 @@ private struct MemberRow: View {
         .contextMenu {
             Button("Whois \(member.nick)") { model.whois(member.nick) }
             Button("Message \(member.nick)") { model.openDM(member.nick) }
+            Menu("Send ASCII Art") { ArtMenu { model.sendArt($0, toNick: member.nick) } }
             Divider()
             Button("Give Op (+o)") { model.setMode(.op, nick: member.nick) }
             Button("Give Voice (+v)") { model.setMode(.voice, nick: member.nick) }

@@ -250,6 +250,16 @@ final class AppModel {
         return members.map(\.nick).filter { $0.lowercased().hasPrefix(token.lowercased()) }
     }
 
+    // MARK: - ASCII art
+
+    /// Send a colourful one-liner to the current conversation. `nick` fills the
+    /// `%nick%` placeholder (the right-clicked member, or the DM peer).
+    func sendArt(_ art: ArtLine, toNick nick: String? = nil) {
+        let target = nick ?? (selectedConversation?.kind == .directMessage ? selectedConversation?.name : "")
+        let text = ArtCatalog.render(art.template, nick: target ?? "")
+        Task { await client.send(text: text, to: selectedID) }
+    }
+
     // MARK: - Channel modes (Undernet)
 
     func networkID(of convID: String) -> String { String(convID.split(separator: "/").first ?? "") }
