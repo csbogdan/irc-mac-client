@@ -25,6 +25,22 @@ actor LiveIRCClient: IRCClient {
     private let altNick: String
     private var nickAttempt = 0
     private var registered = false
+    private var namesBuffer: [String: [Member]] = [:]   // channel → names accumulated across 353s
+
+    /// Parse a NAMES token like "@nick", "+nick", "~nick" into a Member with mode.
+    private static func parseMember(_ token: Substring) -> Member {
+        var t = token
+        var mode: MemberMode = .regular
+        loop: while let f = t.first {
+            switch f {
+            case "~", "&", "@": mode = .op            // owner/admin/op → op glyph
+            case "%", "+": if mode == .regular { mode = .voice }
+            default: break loop
+            }
+            t = t.dropFirst()
+        }
+        return Member(nick: String(t), mode: mode)
+    }
 
     // Identity / auth, from the server config.
     private let username: String
@@ -223,6 +239,18 @@ actor LiveIRCClient: IRCClient {
             if let chan = msg.params.dropFirst(msg.command == "332" ? 1 : 0).first,
                let topic = msg.trailing {
                 emit(.topic(conversationID: "\(networkID)/\(chan)", topic))
+            }
+        case "353":   // RPL_NAMREPLY — names in a channel
+            // params: <me> <symbol> <#channel> :<prefixed names>
+            if msg.params.count >= 3 {
+                let chan = msg.params[2]
+                let members = (msg.trailing ?? "").split(separator: " ").map { Self.parseMember($0) }
+                namesBuffer[chan, default: []].append(contentsOf: members)
+            }
+        case "366":   // RPL_ENDOFNAMES
+            if let chan = msg.params.dropFirst().first {
+                emit(.members(conversationID: "\(networkID)/\(chan)", namesBuffer[chan] ?? []))
+                namesBuffer[chan] = nil
             }
         case "MODE":
             handleMode(msg)
