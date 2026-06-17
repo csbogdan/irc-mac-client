@@ -16,21 +16,37 @@ actor LiveIRCClient: IRCClient {
 
     private let host: NWEndpoint.Host
     private let port: NWEndpoint.Port
+    private let useTLS: Bool
     private let networkID: String
     private var connection: NWConnection?
     private var buffer = Data()
     private var nick: String
 
+    // Identity / auth, from the server config.
+    private let username: String
+    private let realName: String
+    private let serverPassword: String
+    private let saslEnabled: Bool
+    private let saslAccount: String
+    private let saslPassword: String
+
     private var continuation: AsyncStream<IRCEvent>.Continuation?
     nonisolated let events: AsyncStream<IRCEvent>
 
-    init(networkID: String, host: String, port: UInt16, nick: String) {
-        self.networkID = networkID
-        self.host = NWEndpoint.Host(host)
-        self.port = NWEndpoint.Port(rawValue: port)!
-        self.nick = nick
+    init(config: ServerConfig) {
+        self.networkID = config.id
+        self.host = NWEndpoint.Host(config.host)
+        self.port = NWEndpoint.Port(rawValue: config.port > 0 ? UInt16(config.port) : 6697) ?? 6697
+        self.useTLS = config.useTLS
+        self.nick = config.nick
+        self.username = config.effectiveUsername
+        self.realName = config.realName.isEmpty ? config.nick : config.realName
+        self.serverPassword = config.serverPassword
+        self.saslEnabled = config.saslEnabled && !config.saslAccount.isEmpty
+        self.saslAccount = config.saslAccount
+        self.saslPassword = config.saslPassword
         var cont: AsyncStream<IRCEvent>.Continuation!
-        self.events = AsyncStream { cont = $0 }
+        self.events = AsyncStream(bufferingPolicy: .unbounded) { cont = $0 }
         self.continuation = cont
     }
 
@@ -39,8 +55,8 @@ actor LiveIRCClient: IRCClient {
     func connect(networkID: String) async {
         emit(.stateChanged(networkID: networkID, .connecting))
 
-        let tls = NWProtocolTLS.Options()
-        let params = NWParameters(tls: tls, tcp: .init())
+        let params: NWParameters = useTLS ? NWParameters(tls: .init(), tcp: .init())
+                                          : NWParameters(tls: nil, tcp: .init())
         let conn = NWConnection(host: host, port: port, using: params)
         self.connection = conn
 
@@ -55,13 +71,18 @@ actor LiveIRCClient: IRCClient {
     private func handleState(_ state: NWConnection.State) {
         switch state {
         case .ready:
-            // TLS up — register.
+            // Socket/TLS up — begin registration with CAP negotiation.
             emit(.stateChanged(networkID: networkID, .registering))
+            if !serverPassword.isEmpty {
+                rawSend(IRCParser.serialize(command: "PASS", params: [serverPassword]))
+            }
             rawSend(IRCParser.serialize(command: "CAP", params: ["LS", "302"]))
             rawSend(IRCParser.serialize(command: "NICK", params: [nick]))
-            rawSend(IRCParser.serialize(command: "USER", params: [nick, "0", "*", nick]))
-            // SASL (PLAIN) would proceed here via CAP REQ :sasl / AUTHENTICATE.
-        case .failed, .cancelled:
+            rawSend(IRCParser.serialize(command: "USER", params: [username, "0", "*", realName]))
+        case .failed(let error):
+            emit(.serverLine(networkID: networkID, text: "*** Connection failed: \(error.localizedDescription)"))
+            emit(.stateChanged(networkID: networkID, .disconnected))
+        case .cancelled:
             emit(.stateChanged(networkID: networkID, .disconnected))
         default:
             break
@@ -108,6 +129,13 @@ actor LiveIRCClient: IRCClient {
         }
 
         switch msg.command {
+        case "CAP":          handleCAP(msg)
+        case "AUTHENTICATE": handleAuthenticate(msg)
+        case "900":          emit(.serverLine(networkID: networkID, text: msg.trailing ?? "Logged in"))
+        case "903":          rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))   // SASL ok
+        case "902", "904", "905", "906", "907", "908":
+            emit(.serverLine(networkID: networkID, text: "*** SASL: \(msg.trailing ?? "authentication failed")"))
+            rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))
         case "001":
             emit(.stateChanged(networkID: networkID, .connected))
             emit(.serverLine(networkID: networkID, text: msg.trailing ?? "Welcome"))
@@ -167,6 +195,40 @@ actor LiveIRCClient: IRCClient {
                 emit(.serverLine(networkID: networkID, text: t))
             }
         }
+    }
+
+    // MARK: CAP / SASL negotiation
+
+    private func handleCAP(_ msg: IRCMessage) {
+        // :server CAP * <subcommand> :<caps>
+        let sub = msg.params.count >= 2 ? msg.params[1].uppercased() : ""
+        let caps = msg.trailing ?? ""
+        switch sub {
+        case "LS":
+            if saslEnabled, caps.split(separator: " ").contains("sasl") {
+                rawSend(IRCParser.serialize(command: "CAP", params: ["REQ", "sasl"]))
+            } else {
+                rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))
+            }
+        case "ACK":
+            if caps.contains("sasl") {
+                rawSend(IRCParser.serialize(command: "AUTHENTICATE", params: ["PLAIN"]))
+            } else {
+                rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))
+            }
+        case "NAK":
+            rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))
+        default:
+            break
+        }
+    }
+
+    private func handleAuthenticate(_ msg: IRCMessage) {
+        guard msg.params.first == "+" else { return }
+        // SASL PLAIN payload: authzid \0 authcid \0 passwd  (authzid empty)
+        let raw = "\u{0}\(saslAccount)\u{0}\(saslPassword)"
+        let payload = Data(raw.utf8).base64EncodedString()
+        rawSend(IRCParser.serialize(command: "AUTHENTICATE", params: [payload]))
     }
 
     // MARK: MODE parsing

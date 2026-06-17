@@ -7,6 +7,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             ConnectionsSettings().tabItem { Label("Connections", systemImage: "network") }
+            ArtSettings().tabItem { Label("ASCII Art", systemImage: "paintbrush.pointed") }
             AppearanceSettings(appearance: $appearance).tabItem { Label("Appearance", systemImage: "paintpalette") }
             NotificationsSettings().tabItem { Label("Notifications", systemImage: "bell") }
             AdvancedSettings().tabItem { Label("Advanced", systemImage: "gearshape.2") }
@@ -213,9 +214,17 @@ private struct ServerEditor: View {
                 }
             }
 
-            Section("Options") {
+            Section {
                 Toggle("Connect on launch", isOn: $config.connectOnLaunch)
                 Toggle("Reconnect automatically", isOn: $config.autoReconnect)
+                Toggle("Use built-in demo data (offline)", isOn: $config.useMockTransport)
+            } header: {
+                Text("Options")
+            } footer: {
+                Text(config.useMockTransport
+                     ? "This network is simulated offline — no real connection is made."
+                     : "This network connects to \(config.host):\(String(config.port)) over a real \(config.useTLS ? "TLS" : "TCP") socket.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -241,6 +250,61 @@ private struct ServerEditor: View {
 
     private func remove(_ cmd: PerformCommand) {
         config.onConnectCommands.removeAll { $0.id == cmd.id }
+    }
+}
+
+// MARK: - ASCII Art editor
+
+private struct ArtSettings: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    if model.customArt.isEmpty {
+                        Text("No custom art yet. Add a line below — use %nick% to address whoever you right-click, and mIRC color codes (\\u{3}4 = red) for color.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach($model.customArt) { $art in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                TextField("Name", text: $art.name)
+                                    .textFieldStyle(.roundedBorder).frame(width: 160)
+                                Spacer()
+                                Button { model.deleteCustomArt(art.id) } label: {
+                                    Image(systemName: "trash")
+                                }.buttonStyle(.borderless).foregroundStyle(.red)
+                            }
+                            TextField("Template (e.g. \\u{3}4♥ %nick% ♥)", text: $art.template)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12, design: .monospaced))
+                            Text(RichText.render(ArtCatalog.render(art.template, nick: model.selfNick),
+                                                 selfNick: "", dark: true))
+                                .padding(.horizontal, 8).padding(.vertical, 4)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(0.85)))
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text("My ASCII Art")
+                }
+            }
+            .formStyle(.grouped)
+            .onChange(of: model.customArt) { _, _ in model.saveCustomArt() }
+
+            Divider()
+            HStack {
+                Button { model.addCustomArt() } label: { Label("Add Line", systemImage: "plus") }
+                Spacer()
+                Text("Reachable from the composer 🎨 and nick right-click menus.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(10)
+        }
     }
 }
 

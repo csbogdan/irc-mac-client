@@ -3,10 +3,12 @@ import Foundation
 /// Old-school colourful one-line ASCII art, addressable to a nick via `%nick%`.
 /// Color is mIRC formatting: `\u{03}fg[,bg]` … `\u{0F}` reset. The message view
 /// renders these codes (see RichText), so they show up colourful in-app too.
-struct ArtLine: Identifiable, Hashable {
-    var id: String { name }
-    let name: String
-    let template: String
+struct ArtLine: Identifiable, Hashable, Codable {
+    var id = UUID()
+    var name: String
+    var template: String
+
+    init(name: String, template: String) { self.name = name; self.template = template }
 }
 
 private let CC = "\u{03}"          // color code

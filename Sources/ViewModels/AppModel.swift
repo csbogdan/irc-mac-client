@@ -14,8 +14,10 @@ import Observation
 @Observable
 final class AppModel {
 
-    // The seam. Replace the right-hand side to go live.
-    let client: IRCClient = MockIRCService()
+    // Multiplexing transport: in-memory mock for the demo networks, real live
+    // sockets for any server whose config opts out of the mock.
+    let hub = IRCHub()
+    var client: IRCClient { hub }
 
     static let selfNickPlaceholder = "mcimpeanu"
 
@@ -36,8 +38,13 @@ final class AppModel {
     var serverConfigs: [ServerConfig] = []
     private static let serversKey = "relay.serverConfigs.v1"
 
+    // User-defined ASCII art (persisted), shown alongside the built-in catalog.
+    var customArt: [ArtLine] = []
+    private static let artKey = "relay.customArt.v1"
+
     init() {
         loadServers()
+        loadCustomArt()
         Task { await consumeEvents() }
         startAutoConnect()
     }
@@ -176,8 +183,10 @@ final class AppModel {
 
     // MARK: Connection
 
-    func connect(_ networkID: String) { Task { await client.connect(networkID: networkID) } }
-    func disconnect(_ networkID: String) { Task { await client.disconnect(networkID: networkID) } }
+    func connect(_ networkID: String) {
+        Task { await hub.updateConfigs(serverConfigs); await hub.connect(networkID: networkID) }
+    }
+    func disconnect(_ networkID: String) { Task { await hub.disconnect(networkID: networkID) } }
 
     // MARK: Composer entry point — parse slash commands, else send
 
@@ -327,6 +336,33 @@ final class AppModel {
         } else {
             serverConfigs = AppModel.seedServerConfigs()
         }
+        let configs = serverConfigs
+        Task { await hub.updateConfigs(configs) }
+    }
+
+    // MARK: - Custom ASCII art
+
+    private func loadCustomArt() {
+        if let data = UserDefaults.standard.data(forKey: AppModel.artKey),
+           let decoded = try? JSONDecoder().decode([ArtLine].self, from: data) {
+            customArt = decoded
+        }
+    }
+
+    func saveCustomArt() {
+        if let data = try? JSONEncoder().encode(customArt) {
+            UserDefaults.standard.set(data, forKey: AppModel.artKey)
+        }
+    }
+
+    func addCustomArt() {
+        customArt.append(ArtLine(name: "New art", template: "%nick%"))
+        saveCustomArt()
+    }
+
+    func deleteCustomArt(_ id: UUID) {
+        customArt.removeAll { $0.id == id }
+        saveCustomArt()
     }
 
     func saveServers() {
@@ -340,6 +376,8 @@ final class AppModel {
     func serversChanged() {
         for cfg in serverConfigs { ensureNetwork(for: cfg) }
         saveServers()
+        let configs = serverConfigs
+        Task { await hub.updateConfigs(configs) }
     }
 
     private func startAutoConnect() {
@@ -466,7 +504,7 @@ final class AppModel {
     // MARK: - Seed configs (match the demo networks)
 
     private static func seedServerConfigs() -> [ServerConfig] {
-        [
+        let seeds: [ServerConfig] = [
             ServerConfig(id: "undernet", name: "Undernet",
                          host: "Ann-Arbor.MI.US.Undernet.org", port: 6697, useTLS: true,
                          nick: "mcimpeanu", realName: "Relay",
@@ -486,5 +524,7 @@ final class AppModel {
                          saslEnabled: true, saslAccount: "m_c",
                          autoJoinChannels: ["#irc"]),
         ]
+        // The curated demo networks use the in-memory transport.
+        return seeds.map { var c = $0; c.useMockTransport = true; return c }
     }
 }

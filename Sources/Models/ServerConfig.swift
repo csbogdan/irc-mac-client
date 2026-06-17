@@ -42,6 +42,9 @@ struct ServerConfig: Identifiable, Hashable, Codable {
     // Behaviour
     var connectOnLaunch: Bool = false
     var autoReconnect: Bool = true
+    /// When true the network uses the built-in demo data instead of a real
+    /// socket. The seeded networks default to true; servers you add are live.
+    var useMockTransport: Bool = false
 
     // On-connect automation — runs in order, then (after joinDelay) the joins.
     var onConnectCommands: [PerformCommand] = []
