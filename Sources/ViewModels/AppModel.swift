@@ -108,6 +108,7 @@ final class AppModel {
             appendMessage(to: "\(networkID)/$server", Message(id: UUID().uuidString, kind: .server, text: text))
 
         case let .message(convID, message):
+            ensureConversation(convID)
             appendMessage(to: convID, message, incoming: message.nick != selfNick)
 
         case let .topic(convID, topic):
@@ -117,12 +118,23 @@ final class AppModel {
             mutateConversation(convID) { $0.members = members }
 
         case let .memberJoined(convID, member):
+            ensureConversation(convID)
             mutateConversation(convID) {
                 if !$0.members.contains(where: { $0.nick == member.nick }) { $0.members.append(member) }
             }
+            appendMessage(to: convID, Message(id: UUID().uuidString, kind: .join, nick: member.nick, text: "joined"))
 
-        case let .memberLeft(convID, nick, _, _):
+        case let .memberLeft(convID, nick, reason, kind):
             mutateConversation(convID) { $0.members.removeAll { $0.nick == nick } }
+            appendMessage(to: convID, Message(id: UUID().uuidString, kind: kind, nick: nick, text: reason))
+
+        case let .userQuit(networkID, nick, reason):
+            for (cid, conv) in conversations
+            where self.networkID(of: cid) == networkID && conv.kind == .channel
+                  && conv.members.contains(where: { $0.nick == nick }) {
+                mutateConversation(cid) { $0.members.removeAll { $0.nick == nick } }
+                appendMessage(to: cid, Message(id: UUID().uuidString, kind: .quit, nick: nick, text: reason))
+            }
 
         case let .modeChanged(convID, nick, mode):
             mutateConversation(convID) {
@@ -142,9 +154,33 @@ final class AppModel {
                 }
             }
 
-        case let .nickChanged(networkID, _, to):
-            mutateNetwork(networkID) { $0.nick = to }
+        case let .nickChanged(networkID, from, to):
+            // Update our own nick only if it was ours.
+            if networks.first(where: { $0.id == networkID })?.nick == from {
+                mutateNetwork(networkID) { $0.nick = to }
+            }
+            // Rename the member in every channel they're in, and log it.
+            for (cid, conv) in conversations
+            where self.networkID(of: cid) == networkID && conv.kind == .channel
+                  && conv.members.contains(where: { $0.nick == from }) {
+                mutateConversation(cid) {
+                    if let i = $0.members.firstIndex(where: { $0.nick == from }) { $0.members[i].nick = to }
+                }
+                appendMessage(to: cid, Message(id: UUID().uuidString, kind: .server, text: "\(from) is now known as \(to)"))
+            }
         }
+    }
+
+    /// Create a conversation (and surface it in the sidebar) if it doesn't exist
+    /// yet — e.g. an incoming DM from someone new, or a service NOTICE.
+    private func ensureConversation(_ convID: String) {
+        guard conversations[convID] == nil else { return }
+        let netID = networkID(of: convID)
+        guard networks.contains(where: { $0.id == netID }) else { return }
+        let name = String(convID.dropFirst(netID.count + 1))
+        let kind: ConversationKind = (name.hasPrefix("#") || name.hasPrefix("&")) ? .channel : .directMessage
+        conversations[convID] = Conversation(id: convID, kind: kind, name: name)
+        mutateNetwork(netID) { if !$0.conversationIDs.contains(convID) { $0.conversationIDs.append(convID) } }
     }
 
     private func state(of networkID: String) -> ConnectionState? {
@@ -239,7 +275,13 @@ final class AppModel {
             appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server,
                                                   text: "*** You have quit (\(arg.isEmpty ? "Leaving" : arg))"))
         default:
-            appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: "*** Unknown command: /\(cmd)"))
+            // Any other slash command (/mode, /kick, /invite, /away, /list, /who,
+            // /names, /op, …) is sent through as a raw IRC command.
+            guard !netID.isEmpty else { return }
+            let verb = cmd.uppercased()
+            let raw = arg.isEmpty ? verb : "\(verb) \(arg)"
+            Task { await client.sendRaw(raw, networkID: netID) }
+            appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: ">> \(raw)"))
         }
     }
 

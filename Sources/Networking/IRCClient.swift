@@ -14,6 +14,8 @@ enum IRCEvent {
     case members(conversationID: String, [Member])
     case memberJoined(conversationID: String, Member)
     case memberLeft(conversationID: String, nick: String, reason: String, kind: MessageKind)
+    /// A user quit the network entirely — remove from every channel they're in.
+    case userQuit(networkID: String, nick: String, reason: String)
     case modeChanged(conversationID: String, nick: String, mode: MemberMode)
     /// A non-member channel mode toggled (i/m/n/t/l/k/…). `arg` carries the
     /// parameter for +l/+k.

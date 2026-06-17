@@ -182,7 +182,16 @@ actor LiveIRCClient: IRCClient {
             }
         case "NOTICE":
             guard let target = msg.params.first, let body = msg.trailing else { break }
-            let convID = "\(networkID)/\(target)"
+            // Channel notice → channel; user/service notice → DM with the sender;
+            // server notice (no nick source) → server console.
+            let convID: String
+            if target.hasPrefix("#") || target.hasPrefix("&") {
+                convID = "\(networkID)/\(target)"
+            } else if let from = msg.sourceNick, !from.isEmpty {
+                convID = "\(networkID)/\(from)"
+            } else {
+                convID = "\(networkID)/$server"
+            }
             emit(.message(conversationID: convID,
                           Message(id: UUID().uuidString, kind: .notice,
                                   nick: msg.sourceNick ?? "*", text: body)))
@@ -191,12 +200,24 @@ actor LiveIRCClient: IRCClient {
                 emit(.memberJoined(conversationID: "\(networkID)/\(chan)",
                                    Member(nick: nick)))
             }
-        case "PART", "QUIT":
-            if let nick = msg.sourceNick {
-                let chan = msg.params.first ?? ""
+        case "PART":
+            if let nick = msg.sourceNick, let chan = msg.params.first {
                 emit(.memberLeft(conversationID: "\(networkID)/\(chan)",
-                                 nick: nick, reason: msg.trailing ?? "",
-                                 kind: msg.command == "PART" ? .part : .quit))
+                                 nick: nick, reason: msg.trailing ?? "", kind: .part))
+            }
+        case "QUIT":
+            if let nick = msg.sourceNick {
+                emit(.userQuit(networkID: networkID, nick: nick, reason: msg.trailing ?? "Quit"))
+            }
+        case "KICK":
+            // KICK <channel> <nick> :<reason>
+            if msg.params.count >= 2 {
+                let by = msg.sourceNick ?? "?"
+                let reason = msg.trailing ?? ""
+                emit(.memberLeft(conversationID: "\(networkID)/\(msg.params[0])",
+                                 nick: msg.params[1],
+                                 reason: "was kicked by \(by)\(reason.isEmpty ? "" : " (\(reason))")",
+                                 kind: .part))
             }
         case "TOPIC", "332":
             if let chan = msg.params.dropFirst(msg.command == "332" ? 1 : 0).first,
