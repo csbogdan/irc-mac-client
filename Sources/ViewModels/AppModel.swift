@@ -257,8 +257,10 @@ final class AppModel {
         if incoming && convID != selectedID && countsAsActivity(message, in: c) {
             c.unread += 1
             if c.firstUnreadID == nil { c.firstUnreadID = message.id }
+            // Red badge (mentions) only for nick/keyword hits in a channel.
+            // DMs never set mentions → they show only the blue (general) badge.
             let mention = (message.kind == .message || message.kind == .action) && isHighlight(message.text)
-            if mention || c.kind == .directMessage { c.mentions += 1 }
+            if mention && c.kind == .channel { c.mentions += 1 }
         }
         conversations[convID] = c
     }

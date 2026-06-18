@@ -90,15 +90,20 @@ private struct ConversationRow: View {
 
             Spacer(minLength: 4)
 
-            if conv.unread > 0 {
-                Text("\(conv.unread)")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 7).frame(minWidth: 20, minHeight: 19)
-                    .background(Capsule().fill(conv.mentions > 0 ? Theme.mention : Color(white: 0.45)))
-            }
+            // Red = nick/keyword mentions; blue = general traffic. DMs only blue.
+            if conv.mentions > 0 { countBadge(conv.mentions, Color(red: 1.0, green: 0.23, blue: 0.19)) }
+            let general = conv.unread - conv.mentions
+            if general > 0 { countBadge(general, Theme.mention) }
         }
         .contextMenu { contextMenu }
+    }
+
+    private func countBadge(_ n: Int, _ color: Color) -> some View {
+        Text("\(n)")
+            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .frame(minWidth: 16)
+            .background(Capsule().fill(color))
     }
 
     @ViewBuilder private var contextMenu: some View {
