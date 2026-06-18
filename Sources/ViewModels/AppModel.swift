@@ -564,8 +564,10 @@ final class AppModel {
     func updateServer(_ cfg: ServerConfig) {
         guard let i = serverConfigs.firstIndex(where: { $0.id == cfg.id }) else { return }
         serverConfigs[i] = cfg
-        ensureNetwork(for: cfg)
         saveServers()
+        // NB: do NOT call ensureNetwork here — mutating `networks` on every
+        // keystroke re-renders the whole app and steals focus from the editor.
+        Task { [serverConfigs] in await hub.updateConfigs(serverConfigs) }
     }
 
     func deleteServer(_ id: String) {
