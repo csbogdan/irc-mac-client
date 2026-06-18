@@ -39,11 +39,10 @@ struct ConversationView: View {
                     .onSubmit { commitTopic() }
                     .onExitCommand { editingTopic = false }
             } else {
-                Text(conv?.topic.isEmpty == false ? conv!.topic : "Set a topic…")
+                Text(conv?.topic.isEmpty == false ? conv!.topic : "Double-click for channel modes, bans & topic…")
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .onTapGesture { startEditTopic() }
             }
             Spacer()
             if model.searchOpen {
@@ -51,6 +50,9 @@ struct ConversationView: View {
             }
         }
         .padding(.horizontal, 16).frame(minHeight: 40)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) { model.channelModesOpen = true }
+        .help("Double-click to open channel modes, bans & topic")
     }
 
     private var searchField: some View {
@@ -98,9 +100,10 @@ struct ConversationView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .simultaneousGesture(TapGesture(count: 2).onEnded {
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
                 if conv?.kind == .channel { model.channelModesOpen = true }
-            })
+            }
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
                     Button { atBottom = true; withAnimation { proxy.scrollTo("BOTTOM") } } label: {

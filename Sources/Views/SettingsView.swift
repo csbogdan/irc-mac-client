@@ -54,9 +54,9 @@ private struct ConnectionsSettings: View {
             // Detail editor
             Group {
                 if let id = selection, let i = model.serverConfigs.firstIndex(where: { $0.id == id }) {
-                    ServerEditor(config: $model.serverConfigs[i],
+                    ServerEditor(initial: model.serverConfigs[i],
                                  state: model.state(of: id) ?? .disconnected,
-                                 onChange: { model.serversChanged() },
+                                 onSave: { model.updateServer($0) },
                                  onConnect: { model.connect(id) },
                                  onDisconnect: { model.disconnect(id) })
                     .id(id)
@@ -96,13 +96,25 @@ private extension AppModel {
 // MARK: - Single-server editor
 
 private struct ServerEditor: View {
-    @Binding var config: ServerConfig
     let state: ConnectionState
-    let onChange: () -> Void
+    let onSave: (ServerConfig) -> Void
     let onConnect: () -> Void
     let onDisconnect: () -> Void
 
+    // Local editable draft — decoupled from the @Observable model so typing
+    // never re-renders the model mid-keystroke (which stole focus before).
+    @State private var config: ServerConfig
     @State private var newChannel = ""
+
+    init(initial: ServerConfig, state: ConnectionState,
+         onSave: @escaping (ServerConfig) -> Void,
+         onConnect: @escaping () -> Void, onDisconnect: @escaping () -> Void) {
+        self.state = state
+        self.onSave = onSave
+        self.onConnect = onConnect
+        self.onDisconnect = onDisconnect
+        _config = State(initialValue: initial)
+    }
 
     var body: some View {
         Form {
@@ -225,7 +237,7 @@ private struct ServerEditor: View {
             }
         }
         .formStyle(.grouped)
-        .onChange(of: config) { _, _ in onChange() }
+        .onChange(of: config) { _, new in onSave(new) }
     }
 
     private var statusLabel: String {
