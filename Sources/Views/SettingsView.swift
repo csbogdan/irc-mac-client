@@ -226,7 +226,10 @@ private struct ServerEditor: View {
                     }
                 }
                 HStack {
-                    TextField("#channel", text: $newChannel).onSubmit(addChannel)
+                    TextField("Channel", text: $newChannel, prompt: Text("#channel"))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(addChannel)
                     Button("Add", action: addChannel).disabled(newChannel.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }

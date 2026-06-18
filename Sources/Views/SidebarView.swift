@@ -92,10 +92,10 @@ private struct ConversationRow: View {
 
             if conv.unread > 0 {
                 Text("\(conv.unread)")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 6).frame(minWidth: 18, minHeight: 18)
-                    .background(Capsule().fill(conv.mentions > 0 ? Theme.mention : Color.secondary.opacity(0.5)))
+                    .padding(.horizontal, 7).frame(minWidth: 20, minHeight: 19)
+                    .background(Capsule().fill(conv.mentions > 0 ? Theme.mention : Color(white: 0.45)))
             }
         }
         .contextMenu { contextMenu }

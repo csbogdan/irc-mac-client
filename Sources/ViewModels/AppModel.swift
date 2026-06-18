@@ -224,7 +224,9 @@ final class AppModel {
     private func appendMessage(to convID: String, _ message: Message, incoming: Bool = false) {
         guard var c = conversations[convID] else { return }
         c.messages.append(message)
-        if incoming && convID != selectedID {
+        // Only real chat (PRIVMSG/ACTION) bumps the unread badge — service
+        // notices, joins/parts, whois etc. shouldn't keep a DM "unread".
+        if incoming && convID != selectedID && (message.kind == .message || message.kind == .action) {
             c.unread += 1
             if c.firstUnreadID == nil { c.firstUnreadID = message.id }
             let mention = message.text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: selfNick))\\b",

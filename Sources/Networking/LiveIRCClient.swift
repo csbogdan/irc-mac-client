@@ -306,10 +306,20 @@ actor LiveIRCClient: IRCClient {
             if let from = msg.sourceNick, let to = msg.trailing {
                 emit(.nickChanged(networkID: networkID, from: from, to: to))
             }
+        case "PONG", "PING":
+            break   // keepalive — never shown
+        case "396":   // RPL_HOSTHIDDEN: <me> <host> :is now your hidden host
+            if msg.params.count >= 2 {
+                emit(.serverLine(networkID: networkID, text: "\(msg.params[1]) — \(msg.trailing ?? "is now your hidden host")"))
+            }
+        case "329", "333", "315":
+            break   // creation/topic timestamps & WHO end-marker — noise
         default:
-            // Numerics and the rest land in the server console.
-            if Int(msg.command) != nil, let t = msg.trailing {
-                emit(.serverLine(networkID: networkID, text: t))
+            // Other numerics: show the full, readable line (drop the leading
+            // <me> target). Non-numeric junk is ignored.
+            if Int(msg.command) != nil {
+                let text = msg.params.dropFirst().joined(separator: " ")
+                if !text.isEmpty { emit(.serverLine(networkID: networkID, text: text)) }
             }
         }
     }

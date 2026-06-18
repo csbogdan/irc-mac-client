@@ -99,22 +99,27 @@ struct MessageRowView: View {
 private struct EventGroupView: View {
     let summary: String
     let lines: [String]
-    @State private var expanded = false
+    @State private var showDetails = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Button { expanded.toggle() } label: {
-                Text("\(expanded ? "▾" : "▸") \(summary)")
-                    .font(.system(size: 12.5)).foregroundStyle(.tertiary)
+        Button { showDetails.toggle() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right.circle").font(.system(size: 10))
+                Text(summary).font(.system(size: 12.5))
             }
-            .buttonStyle(.plain)
-            if expanded {
+            .foregroundStyle(.tertiary)
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 3)
+        .popover(isPresented: $showDetails, arrowEdge: .leading) {
+            VStack(alignment: .leading, spacing: 3) {
                 ForEach(lines, id: \.self) { l in
-                    Text(l).font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
+                    Text(l).font(.system(size: 12, design: .monospaced))
                 }
             }
+            .padding(12)
+            .frame(maxWidth: 460, alignment: .leading)
         }
-        .padding(.vertical, 3)
     }
 }
 
