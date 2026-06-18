@@ -37,6 +37,7 @@ final class AppModel {
     var xSettingsOpen = false
     var channelListOpen = false
     var channelList: [ChannelListItem] = []
+    var commandPrompt: CommandPrompt?
     @ObservationIgnored private var whoisTargetConvID: String?
 
     // Persisted server configurations — the durable records behind `networks`.
@@ -489,26 +490,143 @@ final class AppModel {
         Task { await client.sendRaw("PRIVMSG \(AppModel.xBot) :USET \(option) \(value)", networkID: networkID) }
     }
 
-    /// Send an arbitrary X (Channel Service) command, echoing it locally.
-    /// Replies come back as NOTICEs from X (see the X conversation).
-    func xCommand(_ args: String, networkID: String) {
-        guard !networkID.isEmpty else { return }
-        Task { await client.sendRaw("PRIVMSG \(AppModel.xBot) :\(args)", networkID: networkID) }
-        appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: ">> X \(args)"))
+    // MARK: - Parameterised commands (with popups)
+
+    /// Present the popup if there are fields to fill, otherwise send immediately.
+    func runCommandPrompt(_ prompt: CommandPrompt) {
+        if prompt.fields.isEmpty { sendCommandPrompt(prompt, fields: []) }
+        else { commandPrompt = prompt }
     }
 
-    /// X command targeting a member in the current channel, e.g. `op`, `kick`.
-    func xMember(_ verb: String, _ nick: String, extra: String = "") {
-        guard let conv = selectedConversation, conv.kind == .channel else { return }
-        let tail = extra.isEmpty ? "" : " \(extra)"
-        xCommand("\(verb) \(conv.name) \(nick)\(tail)", networkID: networkID(of: conv.id))
+    func sendCommandPrompt(_ prompt: CommandPrompt, fields: [CommandField]) {
+        commandPrompt = nil
+        guard !prompt.networkID.isEmpty, let inner = prompt.build(fields),
+              !inner.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let raw = prompt.isX ? "PRIVMSG \(AppModel.xBot) :\(inner)" : inner
+        let nid = prompt.networkID
+        Task { await client.sendRaw(raw, networkID: nid) }
+        appendMessage(to: prompt.echoConvID,
+                      Message(id: UUID().uuidString, kind: .server, text: ">> \(prompt.isX ? "X " : "")\(inner)"))
     }
 
-    /// X command targeting a channel, e.g. `chaninfo`, `banlist`, `op` (self).
-    func xChannel(_ verb: String, for convID: String, extra: String = "") {
-        guard let conv = conversations[convID], conv.kind == .channel else { return }
-        let tail = extra.isEmpty ? "" : " \(extra)"
-        xCommand("\(verb) \(conv.name)\(tail)", networkID: networkID(of: convID))
+    private func channelCtx(_ convID: String) -> (chan: String, net: String, echo: String)? {
+        guard let c = conversations[convID], c.kind == .channel else { return nil }
+        return (c.name, networkID(of: convID), convID)
+    }
+    private func trimmed(_ f: [CommandField], _ i: Int) -> String { f[i].value.trimmingCharacters(in: .whitespaces) }
+
+    // MARK: Normal IRC commands (member, on the selected channel)
+
+    func kickPrompt(_ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Kick \(nick) from \(c.chan)", networkID: c.net, echoConvID: c.echo,
+            fields: [CommandField(label: "Reason", prompt: "optional")]) { f in
+                let r = self.trimmed(f, 0); return "KICK \(c.chan) \(nick)" + (r.isEmpty ? "" : " :\(r)")
+            })
+    }
+    func banPrompt(_ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Ban in \(c.chan)",
+            note: "Plain channel ban (MODE +b). Use Channel Service → Ban for timed/levelled bans.",
+            networkID: c.net, echoConvID: c.echo,
+            fields: [CommandField(label: "Mask", value: "\(nick)!*@*", required: true)]) { f in
+                let m = self.trimmed(f, 0); return m.isEmpty ? nil : "MODE \(c.chan) +b \(m)"
+            })
+    }
+
+    // MARK: X commands on a member in the selected channel
+
+    private func xSimpleMember(_ verb: String, _ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "", isX: true, networkID: c.net, echoConvID: c.echo, fields: []) { _ in "\(verb) \(c.chan) \(nick)" })
+    }
+    func xOp(_ n: String) { xSimpleMember("OP", n) }
+    func xDeop(_ n: String) { xSimpleMember("DEOP", n) }
+    func xVoice(_ n: String) { xSimpleMember("VOICE", n) }
+    func xDevoice(_ n: String) { xSimpleMember("DEVOICE", n) }
+    func xRemUser(_ n: String) { xSimpleMember("REMUSER", n) }
+    func xAccessUser(_ n: String) { xSimpleMember("ACCESS", n) }
+
+    func xKick(_ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Kick \(nick) from \(c.chan) via X", isX: true, networkID: c.net, echoConvID: c.echo,
+            fields: [CommandField(label: "Reason", prompt: "max 128 chars")]) { f in
+                let r = self.trimmed(f, 0); return "KICK \(c.chan) \(nick)" + (r.isEmpty ? "" : " \(r)")
+            })
+    }
+    func xBan(_ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Ban \(nick) in \(c.chan) via X",
+            note: "Duration in hours (max 2400). Level 1–74 prevents ops, 75–500 prevents joining. Default 3h / 75.",
+            isX: true, networkID: c.net, echoConvID: c.echo,
+            fields: [
+                CommandField(label: "Mask", value: "\(nick)!*@*", required: true),
+                CommandField(label: "Duration (hours)", prompt: "3", kind: .number),
+                CommandField(label: "Level", prompt: "75", kind: .number),
+                CommandField(label: "Reason", prompt: "optional"),
+            ]) { f in
+                let mask = self.trimmed(f, 0); guard !mask.isEmpty else { return nil }
+                let dur = self.trimmed(f, 1), lvl = self.trimmed(f, 2), reason = self.trimmed(f, 3)
+                var parts = ["BAN", c.chan, mask]
+                if !dur.isEmpty || !lvl.isEmpty || !reason.isEmpty {
+                    parts.append(dur.isEmpty ? "3" : dur)
+                    parts.append(lvl.isEmpty ? "75" : lvl)
+                    if !reason.isEmpty { parts.append(reason) }
+                }
+                return parts.joined(separator: " ")
+            })
+    }
+    func xUnban(_ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Unban in \(c.chan) via X", isX: true, networkID: c.net, echoConvID: c.echo,
+            fields: [CommandField(label: "Mask", value: "\(nick)!*@*", required: true)]) { f in
+                let m = self.trimmed(f, 0); return m.isEmpty ? nil : "UNBAN \(c.chan) \(m)"
+            })
+    }
+    func xAddUser(_ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Add \(nick) to \(c.chan) userlist",
+            note: "Access level: 1 to your level minus 1.", isX: true, networkID: c.net, echoConvID: c.echo,
+            fields: [CommandField(label: "Access level", prompt: "1–499", required: true, kind: .number)]) { f in
+                let l = self.trimmed(f, 0); return l.isEmpty ? nil : "ADDUSER \(c.chan) \(nick) \(l)"
+            })
+    }
+    func xSuspend(_ nick: String) {
+        guard let c = channelCtx(selectedID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Suspend \(nick) in \(c.chan)",
+            note: "Duration unit: M=minutes, H=hours, D=days (max 372 days).", isX: true, networkID: c.net, echoConvID: c.echo,
+            fields: [
+                CommandField(label: "Duration", required: true, kind: .number),
+                CommandField(label: "Unit", value: "H", kind: .choice(["M", "H", "D"])),
+                CommandField(label: "Level", prompt: "optional", kind: .number),
+            ]) { f in
+                let d = self.trimmed(f, 0); guard !d.isEmpty else { return nil }
+                let u = f[1].value.isEmpty ? "H" : f[1].value
+                let l = self.trimmed(f, 2)
+                return "SUSPEND \(c.chan) \(nick) \(d) \(u)" + (l.isEmpty ? "" : " \(l)")
+            })
+    }
+
+    // MARK: X commands on a channel (from the sidebar)
+
+    private func xSimpleChannel(_ verb: String, _ convID: String) {
+        guard let c = channelCtx(convID) else { return }
+        runCommandPrompt(CommandPrompt(title: "", isX: true, networkID: c.net, echoConvID: c.echo, fields: []) { _ in "\(verb) \(c.chan)" })
+    }
+    func xChannelInfo(_ id: String) { xSimpleChannel("CHANINFO", id) }
+    func xChannelAccess(_ id: String) { xSimpleChannel("ACCESS", id) }
+    func xChannelBanlist(_ id: String) { xSimpleChannel("BANLIST", id) }
+    func xChannelInvite(_ id: String) { xSimpleChannel("INVITE", id) }
+    func xChannelOpMe(_ id: String) { xSimpleChannel("OP", id) }
+    func xChannelDeopMe(_ id: String) { xSimpleChannel("DEOP", id) }
+    func xChannelClearmode(_ id: String) { xSimpleChannel("CLEARMODE", id) }
+    func xChannelTopic(_ convID: String) {
+        guard let c = channelCtx(convID) else { return }
+        runCommandPrompt(CommandPrompt(title: "Set X topic for \(c.chan)", note: "Max 145 characters.",
+            isX: true, networkID: c.net, echoConvID: c.echo,
+            fields: [CommandField(label: "Topic", value: conversations[convID]?.topic ?? "", required: true)]) { f in
+                let t = f[0].value.trimmingCharacters(in: .whitespaces); return t.isEmpty ? nil : "TOPIC \(c.chan) \(t)"
+            })
     }
 
     // MARK: - Bans

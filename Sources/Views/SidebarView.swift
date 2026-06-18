@@ -114,13 +114,15 @@ private struct ConversationRow: View {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(conv.name, forType: .string)
             }
             Menu("Channel Service (X)") {
-                Button("Channel Info") { model.xChannel("chaninfo", for: conv.id) }
-                Button("Access List") { model.xChannel("access", for: conv.id) }
-                Button("Ban List") { model.xChannel("banlist", for: conv.id) }
+                Button("Channel Info") { model.xChannelInfo(conv.id) }
+                Button("Access List") { model.xChannelAccess(conv.id) }
+                Button("Ban List") { model.xChannelBanlist(conv.id) }
+                Button("Set Topic…") { model.xChannelTopic(conv.id) }
                 Divider()
-                Button("Invite Me") { model.xChannel("invite", for: conv.id) }
-                Button("Op Me") { model.xChannel("op", for: conv.id) }
-                Button("Deop Me") { model.xChannel("deop", for: conv.id) }
+                Button("Invite Me") { model.xChannelInvite(conv.id) }
+                Button("Op Me") { model.xChannelOpMe(conv.id) }
+                Button("Deop Me") { model.xChannelDeopMe(conv.id) }
+                Button("Clear Modes") { model.xChannelClearmode(conv.id) }
             }
             Divider()
             Button("Leave Channel", role: .destructive) { model.remove(conv.id) }

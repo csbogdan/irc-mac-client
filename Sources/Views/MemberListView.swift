@@ -78,23 +78,23 @@ private struct MemberRow: View {
             Button("Give Op (+o)") { model.setMode(.op, nick: member.nick) }
             Button("Give Voice (+v)") { model.setMode(.voice, nick: member.nick) }
             Divider()
-            Button("Kick \(member.nick)", role: .destructive) { model.kick(member.nick) }
-            Button("Ban \(member.nick)", role: .destructive) { model.banNick(member.nick) }
-            Button("Unban \(member.nick)") { model.unbanNick(member.nick) }
+            Button("Kick \(member.nick)…", role: .destructive) { model.kickPrompt(member.nick) }
+            Button("Ban \(member.nick)…", role: .destructive) { model.banPrompt(member.nick) }
             Divider()
             Menu("Channel Service (X)") {
-                Button("Op via X") { model.xMember("op", member.nick) }
-                Button("Deop via X") { model.xMember("deop", member.nick) }
-                Button("Voice via X") { model.xMember("voice", member.nick) }
-                Button("Devoice via X") { model.xMember("devoice", member.nick) }
+                Button("Op via X") { model.xOp(member.nick) }
+                Button("Deop via X") { model.xDeop(member.nick) }
+                Button("Voice via X") { model.xVoice(member.nick) }
+                Button("Devoice via X") { model.xDevoice(member.nick) }
                 Divider()
-                Button("Kick via X", role: .destructive) { model.xMember("kick", member.nick) }
-                Button("Ban via X", role: .destructive) { model.xMember("ban", member.nick) }
-                Button("Unban via X") { model.xMember("unban", member.nick) }
+                Button("Kick via X…", role: .destructive) { model.xKick(member.nick) }
+                Button("Ban via X…", role: .destructive) { model.xBan(member.nick) }
+                Button("Unban via X…") { model.xUnban(member.nick) }
                 Divider()
-                Button("Access level") { model.xMember("access", member.nick) }
-                Button("Suspend", role: .destructive) { model.xMember("suspend", member.nick) }
-                Button("Remove from userlist", role: .destructive) { model.xMember("remuser", member.nick) }
+                Button("Access level") { model.xAccessUser(member.nick) }
+                Button("Add to userlist…") { model.xAddUser(member.nick) }
+                Button("Suspend…", role: .destructive) { model.xSuspend(member.nick) }
+                Button("Remove from userlist", role: .destructive) { model.xRemUser(member.nick) }
             }
         }
     }

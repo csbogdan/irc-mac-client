@@ -27,6 +27,7 @@ struct ContentView: View {
         .sheet(isPresented: $model.channelModesOpen) { ChannelModesView() }
         .sheet(isPresented: $model.xSettingsOpen) { XChannelSettingsView() }
         .sheet(isPresented: $model.channelListOpen) { ChannelListView() }
+        .sheet(item: $model.commandPrompt) { CommandPromptView(prompt: $0) }
         .animation(.easeInOut(duration: 0.18), value: model.memberListVisible)
     }
 
