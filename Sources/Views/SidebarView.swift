@@ -109,10 +109,18 @@ private struct ConversationRow: View {
     @ViewBuilder private var contextMenu: some View {
         Button("Mark as Read") { model.markRead(conv.id) }
         if conv.kind == .channel {
-            Button("Set Topic…") { model.select(conv.id) }
             Button(conv.isMuted ? "Unmute Channel" : "Mute Channel") { model.toggleMute(conv.id) }
             Button("Copy Channel Name") {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(conv.name, forType: .string)
+            }
+            Menu("Channel Service (X)") {
+                Button("Channel Info") { model.xChannel("chaninfo", for: conv.id) }
+                Button("Access List") { model.xChannel("access", for: conv.id) }
+                Button("Ban List") { model.xChannel("banlist", for: conv.id) }
+                Divider()
+                Button("Invite Me") { model.xChannel("invite", for: conv.id) }
+                Button("Op Me") { model.xChannel("op", for: conv.id) }
+                Button("Deop Me") { model.xChannel("deop", for: conv.id) }
             }
             Divider()
             Button("Leave Channel", role: .destructive) { model.remove(conv.id) }

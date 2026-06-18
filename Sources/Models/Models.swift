@@ -130,9 +130,8 @@ struct Conversation: Identifiable, Hashable {
 
     var memberCount: Int { kind == .channel ? max(members.count, declaredMemberCount) : 0 }
     var declaredMemberCount: Int = 0
-
-    static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
-    func hash(into h: inout Hasher) { h.combine(id) }
+    // NB: full synthesized Equatable/Hashable (all fields). An id-only `==`
+    // makes SwiftUI skip row updates when unread/mentions change.
 }
 
 // MARK: - Channel list (/list results)
@@ -156,9 +155,7 @@ struct Network: Identifiable, Hashable {
     var conversationIDs: [String] = []
 
     var serverConsoleID: String { "\(id)/$server" }
-
-    static func == (lhs: Network, rhs: Network) -> Bool { lhs.id == rhs.id }
-    func hash(into h: inout Hasher) { h.combine(id) }
+    // Full synthesized Equatable/Hashable so state/nick changes re-render rows.
 }
 
 // MARK: - Nick coloring (stable hash → palette)

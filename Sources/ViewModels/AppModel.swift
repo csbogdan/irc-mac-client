@@ -489,6 +489,28 @@ final class AppModel {
         Task { await client.sendRaw("PRIVMSG \(AppModel.xBot) :USET \(option) \(value)", networkID: networkID) }
     }
 
+    /// Send an arbitrary X (Channel Service) command, echoing it locally.
+    /// Replies come back as NOTICEs from X (see the X conversation).
+    func xCommand(_ args: String, networkID: String) {
+        guard !networkID.isEmpty else { return }
+        Task { await client.sendRaw("PRIVMSG \(AppModel.xBot) :\(args)", networkID: networkID) }
+        appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: ">> X \(args)"))
+    }
+
+    /// X command targeting a member in the current channel, e.g. `op`, `kick`.
+    func xMember(_ verb: String, _ nick: String, extra: String = "") {
+        guard let conv = selectedConversation, conv.kind == .channel else { return }
+        let tail = extra.isEmpty ? "" : " \(extra)"
+        xCommand("\(verb) \(conv.name) \(nick)\(tail)", networkID: networkID(of: conv.id))
+    }
+
+    /// X command targeting a channel, e.g. `chaninfo`, `banlist`, `op` (self).
+    func xChannel(_ verb: String, for convID: String, extra: String = "") {
+        guard let conv = conversations[convID], conv.kind == .channel else { return }
+        let tail = extra.isEmpty ? "" : " \(extra)"
+        xCommand("\(verb) \(conv.name)\(tail)", networkID: networkID(of: convID))
+    }
+
     // MARK: - Bans
 
     func requestChannelList() {

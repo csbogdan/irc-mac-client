@@ -81,6 +81,21 @@ private struct MemberRow: View {
             Button("Kick \(member.nick)", role: .destructive) { model.kick(member.nick) }
             Button("Ban \(member.nick)", role: .destructive) { model.banNick(member.nick) }
             Button("Unban \(member.nick)") { model.unbanNick(member.nick) }
+            Divider()
+            Menu("Channel Service (X)") {
+                Button("Op via X") { model.xMember("op", member.nick) }
+                Button("Deop via X") { model.xMember("deop", member.nick) }
+                Button("Voice via X") { model.xMember("voice", member.nick) }
+                Button("Devoice via X") { model.xMember("devoice", member.nick) }
+                Divider()
+                Button("Kick via X", role: .destructive) { model.xMember("kick", member.nick) }
+                Button("Ban via X", role: .destructive) { model.xMember("ban", member.nick) }
+                Button("Unban via X") { model.xMember("unban", member.nick) }
+                Divider()
+                Button("Access level") { model.xMember("access", member.nick) }
+                Button("Suspend", role: .destructive) { model.xMember("suspend", member.nick) }
+                Button("Remove from userlist", role: .destructive) { model.xMember("remuser", member.nick) }
+            }
         }
     }
 }
