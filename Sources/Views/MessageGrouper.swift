@@ -26,7 +26,13 @@ enum MessageRow: Identifiable {
 
 enum MessageGrouper {
 
-    static func rows(for conv: Conversation, selfNick: String, searchQuery: String?) -> [MessageRow] {
+    static func rows(for conv: Conversation, selfNick: String, keywords: [String] = [], searchQuery: String?) -> [MessageRow] {
+        let highlightWords = ([selfNick] + keywords).filter { !$0.isEmpty }
+        func isHighlight(_ text: String) -> Bool {
+            for w in highlightWords where text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: w))\\b",
+                                                     options: [.regularExpression, .caseInsensitive]) != nil { return true }
+            return false
+        }
         var rows: [MessageRow] = []
         var eventBuffer: [Message] = []
         var previousNick: String?
@@ -75,9 +81,7 @@ enum MessageGrouper {
                 rows.append(.server(m)); previousNick = nil
             case .message:
                 let grouped = previousNick == m.nick
-                let isMention = m.nick != selfNick && !selfNick.isEmpty
-                    && m.text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: selfNick))\\b",
-                                    options: [.regularExpression, .caseInsensitive]) != nil
+                let isMention = m.nick != selfNick && isHighlight(m.text)
                 rows.append(.message(m, showHeader: !grouped, isMention: isMention))
                 previousNick = m.nick
             default:

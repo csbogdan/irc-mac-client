@@ -47,12 +47,36 @@ final class AppModel {
     var customArt: [ArtLine] = []
     private static let artKey = "relay.customArt.v1"
 
+    // Extra words (besides your nick) that trigger the mention highlight/badge.
+    var highlightKeywords: [String] = []
+    private static let keywordsKey = "relay.highlightKeywords.v1"
+
     init() {
         loadServers()
         buildWorld()
         loadCustomArt()
+        if let data = UserDefaults.standard.data(forKey: AppModel.keywordsKey),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            highlightKeywords = decoded
+        }
         Task { await consumeEvents() }
         startAutoConnect()
+    }
+
+    func saveKeywords() {
+        if let data = try? JSONEncoder().encode(highlightKeywords) {
+            UserDefaults.standard.set(data, forKey: AppModel.keywordsKey)
+        }
+    }
+
+    /// Does this text mention you (your nick) or any highlight keyword?
+    func isHighlight(_ text: String) -> Bool {
+        let words = [selfNick] + highlightKeywords
+        for w in words where !w.isEmpty {
+            if text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: w))\\b",
+                          options: [.regularExpression, .caseInsensitive]) != nil { return true }
+        }
+        return false
     }
 
     /// Build the runtime networks/conversations from `serverConfigs`. Every
@@ -127,18 +151,21 @@ final class AppModel {
             mutateConversation(convID) {
                 if !$0.members.contains(where: { $0.nick == member.nick }) { $0.members.append(member) }
             }
-            appendMessage(to: convID, Message(id: UUID().uuidString, kind: .join, nick: member.nick, text: "joined"))
+            appendMessage(to: convID, Message(id: UUID().uuidString, kind: .join, nick: member.nick, text: "joined"),
+                          incoming: member.nick != selfNick)
 
         case let .memberLeft(convID, nick, reason, kind):
             mutateConversation(convID) { $0.members.removeAll { $0.nick == nick } }
-            appendMessage(to: convID, Message(id: UUID().uuidString, kind: kind, nick: nick, text: reason))
+            appendMessage(to: convID, Message(id: UUID().uuidString, kind: kind, nick: nick, text: reason),
+                          incoming: nick != selfNick)
 
         case let .userQuit(networkID, nick, reason):
             for (cid, conv) in conversations
             where self.networkID(of: cid) == networkID && conv.kind == .channel
                   && conv.members.contains(where: { $0.nick == nick }) {
                 mutateConversation(cid) { $0.members.removeAll { $0.nick == nick } }
-                appendMessage(to: cid, Message(id: UUID().uuidString, kind: .quit, nick: nick, text: reason))
+                appendMessage(to: cid, Message(id: UUID().uuidString, kind: .quit, nick: nick, text: reason),
+                              incoming: true)
             }
 
         case let .modeChanged(convID, nick, mode):
@@ -175,6 +202,9 @@ final class AppModel {
                 if added { if !$0.bans.contains(mask) { $0.bans.append(mask) } }
                 else { $0.bans.removeAll { $0 == mask } }
             }
+            appendMessage(to: convID, Message(id: UUID().uuidString, kind: .server,
+                                              text: "*** \(mask) was \(added ? "banned" : "unbanned")"),
+                          incoming: true)
 
         case let .nickChanged(networkID, from, to):
             // Update our own nick only if it was ours.
@@ -224,16 +254,24 @@ final class AppModel {
     private func appendMessage(to convID: String, _ message: Message, incoming: Bool = false) {
         guard var c = conversations[convID] else { return }
         c.messages.append(message)
-        // Only real chat (PRIVMSG/ACTION) bumps the unread badge — service
-        // notices, joins/parts, whois etc. shouldn't keep a DM "unread".
-        if incoming && convID != selectedID && (message.kind == .message || message.kind == .action) {
+        if incoming && convID != selectedID && countsAsActivity(message, in: c) {
             c.unread += 1
             if c.firstUnreadID == nil { c.firstUnreadID = message.id }
-            let mention = message.text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: selfNick))\\b",
-                                             options: [.regularExpression, .caseInsensitive]) != nil
+            let mention = (message.kind == .message || message.kind == .action) && isHighlight(message.text)
             if mention || c.kind == .directMessage { c.mentions += 1 }
         }
         conversations[convID] = c
+    }
+
+    /// In a channel, all activity (chat, joins/parts/quits/kicks, ban/mode
+    /// lines) bumps the badge. In a DM, only real chat does — service notices
+    /// shouldn't keep it "unread".
+    private func countsAsActivity(_ m: Message, in conv: Conversation) -> Bool {
+        switch m.kind {
+        case .message, .action:       return true
+        case .join, .part, .quit, .server: return conv.kind == .channel
+        case .notice, .whois:         return false
+        }
     }
 
     // MARK: Selection
@@ -299,6 +337,22 @@ final class AppModel {
             Task { await client.sendRaw(arg.isEmpty ? "LIST" : "LIST \(arg)", networkID: netID) }
         case "ban":   if let n = rest.first { banNick(n) }
         case "unban": if let n = rest.first { unbanNick(n) }
+        case "invite":
+            // /invite <nick> [#channel]  (defaults to the current channel)
+            if let nick = rest.first {
+                let chan = rest.count > 1 ? rest[1] : (selectedConversation?.kind == .channel ? selectedConversation!.name : "")
+                guard !chan.isEmpty else { break }
+                Task { await client.sendRaw("INVITE \(nick) \(chan)", networkID: netID) }
+                appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: "*** Invited \(nick) to \(chan)"))
+            }
+        case "ctcp":
+            // /ctcp <target> <COMMAND> [args]
+            if rest.count >= 2 {
+                let target = rest[0]
+                let payload = rest.dropFirst().joined(separator: " ")
+                Task { await client.sendRaw("PRIVMSG \(target) :\u{01}\(payload)\u{01}", networkID: netID) }
+                appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: "*** CTCP \(payload) → \(target)"))
+            }
         case "msg", "query":
             if let n = rest.first { openDM(n, message: rest.dropFirst().joined(separator: " ")) }
         case "quit":

@@ -127,7 +127,7 @@ struct ConversationView: View {
 
     private var rows: [MessageRow] {
         guard let conv else { return [] }
-        return MessageGrouper.rows(for: conv, selfNick: model.selfNick,
+        return MessageGrouper.rows(for: conv, selfNick: model.selfNick, keywords: model.highlightKeywords,
                                    searchQuery: model.searchOpen ? model.searchText : nil)
     }
 

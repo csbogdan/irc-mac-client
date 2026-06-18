@@ -150,7 +150,7 @@ struct ComposerView: View {
     private func completeNick() {
         if let c = completion, draft == c.result {
             let idx = (c.index + 1) % c.matches.count
-            let suffix = c.base.trimmingCharacters(in: .whitespaces).isEmpty ? ": " : " "
+            let suffix = Self.completionSuffix(for: c.matches[idx], base: c.base)
             let result = c.base + c.matches[idx] + suffix
             draft = result; completion = NickCompletion(base: c.base, matches: c.matches, index: idx, result: result)
             return
@@ -160,10 +160,16 @@ struct ComposerView: View {
         let matches = model.completions(for: token)
         guard !matches.isEmpty else { return }
         let base = String(draft.dropLast(token.count))
-        let suffix = base.trimmingCharacters(in: .whitespaces).isEmpty ? ": " : " "
+        let suffix = Self.completionSuffix(for: matches[0], base: base)
         let result = base + matches[0] + suffix
         draft = result
         completion = NickCompletion(base: base, matches: matches, index: 0, result: result)
+    }
+
+    /// "nick: " at line start, "nick " mid-line; channels never get a colon.
+    private static func completionSuffix(for candidate: String, base: String) -> String {
+        if candidate.hasPrefix("#") || candidate.hasPrefix("&") { return " " }
+        return base.trimmingCharacters(in: .whitespaces).isEmpty ? ": " : " "
     }
 
     private func send() {

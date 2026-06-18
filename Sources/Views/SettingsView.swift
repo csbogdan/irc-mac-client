@@ -351,16 +351,53 @@ private struct AppearanceSettings: View {
 }
 
 private struct NotificationsSettings: View {
+    @Environment(AppModel.self) private var model
     @AppStorage("notifyMentions") private var notifyMentions = true
     @AppStorage("notifyDMs") private var notifyDMs = true
     @AppStorage("dockBadge") private var dockBadge = true
+    @State private var newKeyword = ""
+
     var body: some View {
+        @Bindable var model = model
         Form {
-            Toggle("Notify on mentions", isOn: $notifyMentions)
-            Toggle("Notify on direct messages", isOn: $notifyDMs)
-            Toggle("Show unread count on Dock icon", isOn: $dockBadge)
+            Section {
+                Toggle("Notify on mentions", isOn: $notifyMentions)
+                Toggle("Notify on direct messages", isOn: $notifyDMs)
+                Toggle("Show unread count on Dock icon", isOn: $dockBadge)
+            }
+            Section {
+                Text("Messages containing your nick or any of these words get the blue mention badge & highlight.")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(model.highlightKeywords, id: \.self) { word in
+                    HStack {
+                        Image(systemName: "number").foregroundStyle(.secondary)
+                        Text(word)
+                        Spacer()
+                        Button { model.highlightKeywords.removeAll { $0 == word }; model.saveKeywords() } label: {
+                            Image(systemName: "minus.circle.fill")
+                        }.buttonStyle(.borderless).foregroundStyle(.secondary)
+                    }
+                }
+                HStack {
+                    TextField("Keyword", text: $newKeyword, prompt: Text("e.g. release, undernet, deploy"))
+                        .labelsHidden().textFieldStyle(.roundedBorder)
+                        .onSubmit(addKeyword)
+                    Button("Add", action: addKeyword)
+                        .disabled(newKeyword.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            } header: {
+                Text("Highlight Keywords")
+            }
         }
         .formStyle(.grouped).padding()
+    }
+
+    private func addKeyword() {
+        let w = newKeyword.trimmingCharacters(in: .whitespaces)
+        guard !w.isEmpty, !model.highlightKeywords.contains(w) else { return }
+        model.highlightKeywords.append(w)
+        model.saveKeywords()
+        newKeyword = ""
     }
 }
 

@@ -306,6 +306,12 @@ actor LiveIRCClient: IRCClient {
             if let from = msg.sourceNick, let to = msg.trailing {
                 emit(.nickChanged(networkID: networkID, from: from, to: to))
             }
+        case "INVITE":
+            // :nick INVITE you :#channel
+            if let from = msg.sourceNick {
+                let chan = msg.trailing ?? msg.params.last ?? ""
+                emit(.serverLine(networkID: networkID, text: "*** \(from) invites you to \(chan)  (type /join \(chan))"))
+            }
         case "PONG", "PING":
             break   // keepalive — never shown
         case "396":   // RPL_HOSTHIDDEN: <me> <host> :is now your hidden host
