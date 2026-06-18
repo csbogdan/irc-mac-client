@@ -178,11 +178,16 @@ private struct ServerEditor: View {
             Section {
                 ForEach($config.onConnectCommands) { $cmd in
                     HStack(spacing: 8) {
-                        TextField("/msg NickServ identify …  or  MODE %nick% +x", text: $cmd.line)
+                        TextField("Command", text: $cmd.line,
+                                  prompt: Text("/msg NickServ identify …  or  MODE %nick% +x"))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
                             .font(.system(size: 12, design: .monospaced))
                         HStack(spacing: 2) {
-                            TextField("0", value: $cmd.delay, format: .number)
-                                .frame(width: 40).multilineTextAlignment(.trailing)
+                            TextField("Delay", value: $cmd.delay, format: .number)
+                                .labelsHidden()
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 44).multilineTextAlignment(.trailing)
                             Text("s").foregroundStyle(.secondary)
                         }
                         Button { remove(cmd) } label: { Image(systemName: "minus.circle.fill") }
