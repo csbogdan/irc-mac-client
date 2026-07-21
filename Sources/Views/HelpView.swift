@@ -237,6 +237,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Bullet("Right-click a person anywhere → Message.")
             Bullet("Or type /msg theirname hello — it opens the chat and sends the first line.")
             Bullet("If someone messages you first, the chat simply appears in your sidebar.")
+            Bullet("Nicknames aren't case-sensitive — x and X are the same person, one chat.")
             H("Who is this person?")
             P("Double-click any private chat in the sidebar — Relay runs /whois and prints who they are: their address, server, how long they've been idle, when they signed on, and whether they're marked away.")
             Note("Anyone can message you. If someone is a pest, see Blocking People.")

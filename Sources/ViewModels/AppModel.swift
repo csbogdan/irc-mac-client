@@ -164,6 +164,14 @@ final class AppModel {
         case let .message(convID, message):
             guard message.nick.isEmpty || !isIgnored(message.nick) else { return }
             ensureConversation(convID)
+            // DMs display the peer's actual nick casing (x → X as they use it).
+            mutateConversation(convID) {
+                if $0.kind == .directMessage, !message.nick.isEmpty,
+                   $0.name.caseInsensitiveCompare(message.nick) == .orderedSame,
+                   $0.name != message.nick {
+                    $0.name = message.nick
+                }
+            }
             appendMessage(to: convID, message, incoming: message.nick != selfNick)
 
         case let .topic(convID, topic):
@@ -539,7 +547,8 @@ final class AppModel {
 
     func openDM(_ nick: String, message: String = "") {
         guard let net = selectedNetwork else { return }
-        let id = "\(net.id)/\(nick)"
+        // Nicks are case-insensitive on IRC — /msg x must reuse the DM with X.
+        let id = canonicalConvID("\(net.id)/\(nick)")
         if conversations[id] == nil {
             conversations[id] = Conversation(id: id, kind: .directMessage, name: nick)
             mutateNetwork(net.id) { $0.conversationIDs.append(id) }
