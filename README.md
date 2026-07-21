@@ -13,6 +13,8 @@ Liquid Glass looks. mIRC soul.
 ![Built for](https://img.shields.io/badge/tuned%20for-Undernet-6A5ACD)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 
+**[⬇ Download](https://github.com/csbogdan/irc-mac-client/releases/latest)** · **[📖 Read the manual](https://github.com/csbogdan/irc-mac-client/wiki)**
+
 </div>
 
 <img src="docs/screenshots/hero.png" alt="Relay main window" width="100%">
