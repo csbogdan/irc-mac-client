@@ -1,112 +1,113 @@
-# Relay — native macOS IRC client (SwiftUI)
+<div align="center">
 
-A first-party-feeling IRC client for macOS 14+ (Sonoma/Sequoia/Tahoe), Swift 5.9+.
-SwiftUI-first with AppKit bridging only where SwiftUI falls short. Ships with an
-in-memory mock service so the app is **fully interactive offline**, behind the
-same `IRCClient` protocol the real `NWConnection` transport implements — swapping
-mock for live is a one-line change.
+<img src="docs/icon.png" width="128" alt="Relay icon">
 
-## Build
+# Relay
 
-The Xcode project is generated from `project.yml` with [XcodeGen]
-(`brew install xcodegen`) — the `.xcodeproj` is not committed.
+**A modern, native IRC client for macOS.**
+Liquid Glass looks. mIRC soul.
+
+[![Release](https://img.shields.io/github/v/release/csbogdan/irc-mac-client?label=download&color=0A84FF)](https://github.com/csbogdan/irc-mac-client/releases/latest)
+![Platform](https://img.shields.io/badge/macOS-14%2B-black)
+![Swift](https://img.shields.io/badge/Swift-5.9-F05138)
+![Built for](https://img.shields.io/badge/tuned%20for-Undernet-6A5ACD)
+
+</div>
+
+<!-- hero: docs/screenshots/hero.png
+<img src="docs/screenshots/hero.png" alt="Relay main window" width="100%">
+-->
+
+IRC is the internet's original group chat — running since 1988, still alive, still weird in the best way. Relay gives it a first-class Mac home: SwiftUI three-column layout, Liquid Glass on macOS 26, Notification Center, hover link previews — with all the culture intact: `/slap`, ASCII art, `+s` back rooms, and a channel-service bot named X.
+
+## Features
+
+**A real Mac app**
+- Native three-column layout — networks & channels, conversation, member list
+- Liquid Glass chrome on macOS 26 (graceful materials on 14/15)
+- Mentions & DMs hit **Notification Center** when backgrounded — click to jump there
+- Unread counts on the Dock icon, red/blue sidebar badges (mentions vs. activity)
+- Hover any link for a live **preview card**; mIRC color codes render properly
+- Fast: cached rendering, grouped messages, capped scrollback — floods don't lag it
+
+**Classic IRC, done right**
+- Multiple networks, TLS, SASL, server passwords, per-server identity
+- **Auto-reconnect** with exponential backoff — runs your perform commands first, *then* rejoins your channels
+- Tab completion that **cycles** through matches; ↑/↓ input history
+- Built-in **flood protection** — paste 40 lines, keep your connection
+- `/whois` with idle time & away, channel browser, ban lists, mode editors
+- `/ignore` (client-side) and `/silence` (Undernet server-side) for pest control
+
+**Undernet native**
+- Full **X channel-service** integration: op/deop/voice, timed & levelled bans, userlists, suspend — all in right-click menus with proper parameter popups
+- Join refused? Relay reads the reason and offers the fix: a key prompt on `+k`, one-click **"Ask X for an Invite"** on `+i`, **"Ask X to Unban Me"** on `+b` — then rejoins for you
+
+**The fun parts**
+- **Private Sessions**: one click reconnects you under a random nick into a random `+s` secret channel — no performs, no auto-joins, no trace
+- An ASCII art catalog (rainbow greetings, table flips, trout) addressable to any nick — plus your own custom art with live preview
+- A complete, human-readable **built-in manual** (⌘?)
+- Quiet any channel: no counters, no notifications, just peace
+
+<!-- gallery
+| | |
+|---|---|
+| <img src="docs/screenshots/composer.png" alt="Slash commands"> | <img src="docs/screenshots/member-menu.png" alt="X service menu"> |
+| <img src="docs/screenshots/link-preview.png" alt="Link previews"> | <img src="docs/screenshots/join-error.png" alt="Join-error fix"> |
+| <img src="docs/screenshots/private-session.png" alt="Private session"> | <img src="docs/screenshots/help.png" alt="Built-in manual"> |
+-->
+
+## Install
+
+1. Grab `Relay-x.y.z.zip` from the [latest release](https://github.com/csbogdan/irc-mac-client/releases/latest)
+2. Unzip and drag **Relay.app** to `/Applications`
+3. First launch: **right-click → Open** (the app is self-signed, so macOS asks once)
+
+Requires macOS 14 Sonoma or newer. Looks its best on macOS 26 Tahoe.
+
+## Build from source
+
+The Xcode project is generated from `project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen); the `.xcodeproj` is not committed.
 
 ```sh
-xcodegen generate          # writes Relay.xcodeproj
-open Relay.xcodeproj        # then ⌘R, or:
-xcodebuild -project Relay.xcodeproj -scheme Relay -configuration Debug \
-           -destination 'platform=macOS' build
+brew install xcodegen
+xcodegen generate
+xcodebuild -project Relay.xcodeproj -scheme Relay -configuration Release build
+swift test          # parser unit tests
 ```
 
-The app target is sandboxed with the **Outgoing Connections (Client)** entitlement
-(`Relay.entitlements`) so the live client can open TLS sockets.
-
-> The provided `Package.swift` builds the modules and runs the parser tests from
-> the command line (`swift build`, `swift test`) but does **not** produce a `.app`
-> bundle — use the Xcode project above to run the GUI.
-
-[XcodeGen]: https://github.com/yonaskolb/XcodeGen
-
-## Architecture
+<details>
+<summary><b>Architecture</b> (for the curious)</summary>
 
 ```
 Sources/
-  App/
-    RelayApp.swift          WindowGroup + Settings scene; .commands menu bar (⌘K/⌘N/⌘F/⌘1–9)
-  Models/
-    Models.swift            Network, Conversation, Message, Member, enums, NickColor
+  App/RelayApp.swift             Scenes (main, Settings, About, Help) + menu bar
+  Models/                        Network, Conversation, Message, ServerConfig, art catalog
   Networking/
-    IRCClient.swift         IRCClient protocol + IRCEvent stream (the swap seam)
-    IRCParser.swift         RFC 1459/2812 + IRCv3 message-tag parser/serializer (pure, testable)
-    LiveIRCClient.swift     NWConnection TLS transport actor — parses & emits IRCEvents
-  Services/
-    MockIRCService.swift    In-memory client + seed data + live chatter timer
-  ViewModels/
-    AppModel.swift          @MainActor @Observable; consumes IRCEvent, exposes intents
-  Views/
-    Theme.swift             Design tokens + AttributedString rich text (links, mentions)
-    MessageGrouper.swift    Pure transform: messages → grouped display rows
-    ContentView.swift       NavigationSplitView 3-column shell + unified toolbar
-    SidebarView.swift       Source list: networks → channels/DMs, badges, context menus
-    ConversationView.swift  Topic bar, scrollback, connecting/offline states, jump-to-latest
-    MessageRowView.swift    Avatar + name/time grouped rows, /me, notices, previews, events
-    ComposerView.swift      Slash autocomplete, Tab nick-completion, command parsing
-    MemberListView.swift    Op/voice groups, presence, per-member context menu
-    QuickSwitcherView.swift ⌘K fuzzy switcher
-    SettingsView.swift      TabView: Accounts / Appearance / Notifications / Advanced
-Tests/
-    IRCParserTests.swift    Parser unit tests
+    IRCParser.swift              RFC 1459/2812 + IRCv3 tags parser/serializer (pure, tested)
+    LiveIRCClient.swift          NWConnection TLS transport actor; paced send queue
+    IRCHub.swift                 Multiplexes one live client per network into one event stream
+  Services/NotificationManager   Notification Center bridge
+  ViewModels/AppModel.swift      @MainActor @Observable — all state, intents, reconnect logic
+  Views/                         Sidebar, conversation, composer, member list, help, settings…
+Tests/                           Parser unit tests
 ```
 
-### The swap seam (mock → live)
+One seam: everything talks to the `IRCClient` protocol emitting an `IRCEvent` stream. The app is sandboxed with the outgoing-connections entitlement only.
 
-`AppModel` talks only to an `IRCClient`. To go live, change one line in `AppModel`:
+</details>
 
-```swift
-// let client: IRCClient = MockIRCService()
-let client: IRCClient = LiveIRCClient(networkID: "undernet",
-                                      host: "irc.undernet.org", port: 6697,
-                                      nick: "mcimpeanu")
-```
+## Versioning
 
-Both conform to `IRCClient` and emit the same `IRCEvent` stream; the view model
-and every view are unchanged.
+[Semantic versioning](https://semver.org): breaking/major features bump minor, fixes bump patch. Every release ships a signed-ish zip of the app.
 
-## What's implemented
+---
 
-- **3-column `NavigationSplitView`** with min/ideal/max column widths, unified
-  toolbar (`.toolbarRole(.editor)` via `.windowToolbarStyle(.unified)`), collapsible member list.
-- **Multiple networks** each with their own nick, channel set, and a
-  `disconnected → connecting → registering → connected` state machine. Connecting
-  shows a streaming server log; offline shows a Connect button.
-- **Sidebar** source list with per-network sections, connection-state dots,
-  unread badges, blue mention badges, muted dimming, and channel/DM context menus
-  (Mark as Read, Set Topic, Mute, Copy Name, Leave / Close).
-- **Modern grouped message list**: circular nick-colored avatars, name + time
-  headers, grouped follow-ons, `/me` actions, notices, monospace server/whois
-  lines, coalesced + expandable join/part/quit, self-mention highlight, unread
-  divider, clickable URLs + self-mention pills (`AttributedString`), link & image
-  preview cards, jump-to-latest pill, per-channel find.
-- **Composer**: `/join /part /me /nick /topic /whois /msg /query /quit` parsing,
-  Tab nick-completion with cycling candidate chips, `/` slash autocomplete popover
-  (↑/↓/Tab/Return), Shift+Return newline.
-- **Member list**: Operators / Voiced / Members groups, presence dots, mode
-  glyphs, context menu (whois, message, op, voice, kick, ignore).
-- **Menu bar `.commands`**: ⌘K quick switcher, ⌘N, ⌘F, ⌘1–9 jump.
-- **Settings scene** TabView (Accounts, Appearance, Notifications, Advanced) with
-  accent / density / timestamp prefs via `@AppStorage`; light/dark/system.
+<div align="center">
 
-## Notes / next steps
+Made by **Rufus** · 100% vibe-coded — the code has never been read, only felt
 
-- **SwiftData**: the brief calls for SwiftData persistence. State currently lives
-  in the `@Observable` `AppModel` (sufficient for the mock and a clean MVVM seam).
-  To persist, back `Conversation`/`Message` with `@Model` types and load/save in
-  `AppModel`; the view layer won't change.
-- **UserNotifications / Dock badge**: hook `UNUserNotificationCenter` in
-  `AppModel.appendMessage` where `mentions`/DM increments happen (TODO marked).
-- **SASL**: the `LiveIRCClient` registers with CAP negotiation; wire the
-  `AUTHENTICATE PLAIN` exchange in `handleState`/`handle` to finish SASL.
-- The interactive HTML design reference this was built from is in
-  `../design_handoff_irc_client/Relay.dc.html` — open it in a browser to see the
-  intended look and motion.
-```
+An homage to **mIRC**. Day ~11,000 of your 30-day evaluation period. Please consider registering.
+
+🐟 *slaps you around a bit with a large trout*
+
+</div>
