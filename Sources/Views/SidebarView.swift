@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// Source-list sidebar: one Section per network with a connection-state header,
-/// channel/DM rows, unread/mention badges and context menus.
+/// channel/DM rows, unread/mention badges and context menus. Row menus and
+/// double-click live at the List level (contextMenu(forSelectionType:)) so
+/// nothing competes with selection clicks.
 struct SidebarView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
@@ -28,6 +30,14 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .contextMenu(forSelectionType: String.self) { ids in
+            if let id = ids.first, let conv = model.conversations[id] { rowMenu(conv) }
+        } primaryAction: { ids in
+            // Double-click: a DM runs /whois on its peer.
+            guard let id = ids.first, let conv = model.conversations[id] else { return }
+            model.select(id)
+            if conv.kind == .directMessage { model.whois(conv.name) }
+        }
     }
 
     /// Sidebar order within a network: server console first, then all
@@ -44,6 +54,33 @@ struct SidebarView: View {
         return convs.enumerated()
             .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
             .map(\.element)
+    }
+
+    @ViewBuilder private func rowMenu(_ conv: Conversation) -> some View {
+        Button("Mark as Read") { model.markRead(conv.id) }
+        if conv.kind == .channel {
+            Button(conv.isMuted ? "Unquiet Channel" : "Quiet Channel") { model.toggleMute(conv.id) }
+            Button("Copy Channel Name") {
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(conv.name, forType: .string)
+            }
+            Menu("Channel Service (X)") {
+                Button("Channel Info") { model.xChannelInfo(conv.id) }
+                Button("Access List") { model.xChannelAccess(conv.id) }
+                Button("Ban List") { model.xChannelBanlist(conv.id) }
+                Button("Set Topic…") { model.xChannelTopic(conv.id) }
+                Divider()
+                Button("Invite Me") { model.xChannelInvite(conv.id) }
+                Button("Op Me") { model.xChannelOpMe(conv.id) }
+                Button("Deop Me") { model.xChannelDeopMe(conv.id) }
+                Button("Clear Modes") { model.xChannelClearmode(conv.id) }
+            }
+            Divider()
+            Button("Leave Channel", role: .destructive) { model.remove(conv.id) }
+        } else if conv.kind == .directMessage {
+            Button(conv.isMuted ? "Unquiet" : "Quiet") { model.toggleMute(conv.id) }
+            Divider()
+            Button("Close Conversation", role: .destructive) { model.remove(conv.id) }
+        }
     }
 }
 
@@ -125,14 +162,6 @@ private struct ConversationRow: View {
             let general = conv.unread - conv.mentions
             if general > 0 { countBadge(general, Theme.mention) }
         }
-        .contextMenu { contextMenu }
-        // Double-click a DM → /whois its peer (results land in that DM).
-        .simultaneousGesture(TapGesture(count: 2).onEnded {
-            if conv.kind == .directMessage {
-                model.select(conv.id)
-                model.whois(conv.name)
-            }
-        })
     }
 
     private func countBadge(_ n: Int, _ color: Color) -> some View {
@@ -141,32 +170,5 @@ private struct ConversationRow: View {
             .padding(.horizontal, 5).padding(.vertical, 1)
             .frame(minWidth: 16)
             .background(Capsule().fill(color))
-    }
-
-    @ViewBuilder private var contextMenu: some View {
-        Button("Mark as Read") { model.markRead(conv.id) }
-        if conv.kind == .channel {
-            Button(conv.isMuted ? "Unquiet Channel" : "Quiet Channel") { model.toggleMute(conv.id) }
-            Button("Copy Channel Name") {
-                NSPasteboard.general.clearContents(); NSPasteboard.general.setString(conv.name, forType: .string)
-            }
-            Menu("Channel Service (X)") {
-                Button("Channel Info") { model.xChannelInfo(conv.id) }
-                Button("Access List") { model.xChannelAccess(conv.id) }
-                Button("Ban List") { model.xChannelBanlist(conv.id) }
-                Button("Set Topic…") { model.xChannelTopic(conv.id) }
-                Divider()
-                Button("Invite Me") { model.xChannelInvite(conv.id) }
-                Button("Op Me") { model.xChannelOpMe(conv.id) }
-                Button("Deop Me") { model.xChannelDeopMe(conv.id) }
-                Button("Clear Modes") { model.xChannelClearmode(conv.id) }
-            }
-            Divider()
-            Button("Leave Channel", role: .destructive) { model.remove(conv.id) }
-        } else if conv.kind == .directMessage {
-            Button(conv.isMuted ? "Unquiet" : "Quiet") { model.toggleMute(conv.id) }
-            Divider()
-            Button("Close Conversation", role: .destructive) { model.remove(conv.id) }
-        }
     }
 }

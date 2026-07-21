@@ -174,8 +174,12 @@ final class AppModel {
 
         case let .memberJoined(convID, member):
             ensureConversation(convID)
+            // JOIN carries the server's canonical channel casing — adopt it
+            // for display (the conversation ID stays stable).
+            let serverName = String(convID.dropFirst(networkID(of: convID).count + 1))
             mutateConversation(convID) {
                 if !$0.members.contains(where: { $0.nick == member.nick }) { $0.members.append(member) }
+                if $0.kind == .channel, $0.name != serverName { $0.name = serverName }
             }
             appendMessage(to: convID, Message(id: UUID().uuidString, kind: .join, nick: member.nick, text: "joined"),
                           incoming: member.nick != selfNick)
@@ -256,9 +260,20 @@ final class AppModel {
         }
     }
 
+    /// IRC channel names are case-insensitive, but the server echoes its own
+    /// canonical casing (JOIN #romania → :you JOIN #Romania). Map any casing
+    /// onto the conversation that already exists so we never split one channel
+    /// into two.
+    private func canonicalConvID(_ id: String) -> String {
+        if conversations[id] != nil { return id }
+        let lower = id.lowercased()
+        return conversations.keys.first { $0.lowercased() == lower } ?? id
+    }
+
     /// Create a conversation (and surface it in the sidebar) if it doesn't exist
     /// yet — e.g. an incoming DM from someone new, or a service NOTICE.
     private func ensureConversation(_ convID: String) {
+        let convID = canonicalConvID(convID)
         guard conversations[convID] == nil else { return }
         let netID = networkID(of: convID)
         guard networks.contains(where: { $0.id == netID }) else { return }
@@ -279,12 +294,14 @@ final class AppModel {
         body(&networks[i])
     }
     private func mutateConversation(_ id: String, _ body: (inout Conversation) -> Void) {
+        let id = canonicalConvID(id)
         guard var c = conversations[id] else { return }
         body(&c)
         conversations[id] = c
     }
 
     private func appendMessage(to convID: String, _ message: Message, incoming: Bool = false) {
+        let convID = canonicalConvID(convID)
         guard var c = conversations[convID] else { return }
         c.messages.append(message)
         // Cap scrollback so a flooded channel can't grow unboundedly laggy.
@@ -484,7 +501,7 @@ final class AppModel {
     func joinChannel(_ name: String) {
         guard let net = selectedNetwork else { return }
         let chan = name.hasPrefix("#") ? name : "#\(name)"
-        let id = "\(net.id)/\(chan)"
+        let id = canonicalConvID("\(net.id)/\(chan)")   // case-insensitive reuse
         if conversations[id] == nil {
             conversations[id] = Conversation(id: id, kind: .channel, name: chan,
                                              members: [Member(nick: net.nick)])
@@ -1056,7 +1073,7 @@ final class AppModel {
     /// Join a channel as part of auto-join without stealing the current selection.
     private func joinOnConnect(_ name: String, networkID: String) {
         let chan = name.hasPrefix("#") || name.hasPrefix("&") ? name : "#\(name)"
-        let id = "\(networkID)/\(chan)"
+        let id = canonicalConvID("\(networkID)/\(chan)")   // case-insensitive reuse
         if conversations[id] == nil {
             conversations[id] = Conversation(id: id, kind: .channel, name: chan, members: [])
             mutateNetwork(networkID) { if !$0.conversationIDs.contains(id) { $0.conversationIDs.append(id) } }
