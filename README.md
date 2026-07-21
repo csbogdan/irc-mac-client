@@ -14,9 +14,7 @@ Liquid Glass looks. mIRC soul.
 
 </div>
 
-<!-- hero: docs/screenshots/hero.png
 <img src="docs/screenshots/hero.png" alt="Relay main window" width="100%">
--->
 
 IRC is the internet's original group chat — running since 1988, still alive, still weird in the best way. Relay gives it a first-class Mac home: SwiftUI three-column layout, Liquid Glass on macOS 26, Notification Center, hover link previews — with all the culture intact: `/slap`, ASCII art, `+s` back rooms, and a channel-service bot named X.
 
@@ -48,12 +46,19 @@ IRC is the internet's original group chat — running since 1988, still alive, s
 - A complete, human-readable **built-in manual** (⌘?)
 - Quiet any channel: no counters, no notifications, just peace
 
-<!-- gallery
-| | |
+## Screenshots
+
+| Slash commands, discoverable | Everything on right-click |
 |---|---|
-| <img src="docs/screenshots/composer.png" alt="Slash commands"> | <img src="docs/screenshots/member-menu.png" alt="X service menu"> |
-| <img src="docs/screenshots/link-preview.png" alt="Link previews"> | <img src="docs/screenshots/join-error.png" alt="Join-error fix"> |
-| <img src="docs/screenshots/private-session.png" alt="Private session"> | <img src="docs/screenshots/help.png" alt="Built-in manual"> |
+| <img src="docs/screenshots/composer.png" alt="Slash command popover"> | <img src="docs/screenshots/member-menu.png" alt="Member context menu with ignore, silence and X service"> |
+
+| Join refused? One-click fix | Per-server everything |
+|---|---|
+| <img src="docs/screenshots/join-error.png" alt="Invite-only channel — Ask X for an Invite"> | <img src="docs/screenshots/settings.png" alt="Connections settings"> |
+
+<!-- pending shots
+| <img src="docs/screenshots/link-preview.png" alt="Link previews"> | <img src="docs/screenshots/private-session.png" alt="Private session"> |
+| <img src="docs/screenshots/help.png" alt="Built-in manual"> | |
 -->
 
 ## Install
