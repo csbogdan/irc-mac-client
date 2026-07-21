@@ -1,5 +1,8 @@
 import SwiftUI
 import LinkPresentation
+import os
+
+let linkPreviewLog = Logger(subsystem: "org.relay.irc", category: "linkpreview")
 
 /// Renders one display row. Modern grouped layout: avatar gutter + name/time
 /// header + body, with distinct treatments for actions, notices, server lines
@@ -12,9 +15,11 @@ struct MessageRowView: View {
 
     private let gutter: CGFloat = 45  // avatar column (34) + spacing
 
-    // Hover link preview
-    @State private var showLinkPreview = false
-    @State private var previewURL: URL?
+    // Hover link preview. Item-based presentation so the popover and its URL
+    // can never desync (an isPresented + separate URL state raced and showed
+    // an empty popover).
+    struct PreviewLink: Identifiable { let id: String; let url: URL }
+    @State private var hoverPreview: PreviewLink?
     @State private var hoverTask: Task<Void, Never>?
 
     var body: some View {
@@ -106,8 +111,8 @@ struct MessageRowView: View {
         // the Text to an AppKit text view that eats hover events, so onHover
         // on the Text itself never fires.
         .onHover { hovering in linkHover(hovering, text: m.text) }
-        .popover(isPresented: $showLinkPreview, arrowEdge: .bottom) {
-            if let url = previewURL { LinkHoverPreview(url: url) }
+        .popover(item: $hoverPreview, arrowEdge: .bottom) { p in
+            LinkHoverPreview(url: p.url)
         }
     }
 
@@ -117,17 +122,20 @@ struct MessageRowView: View {
         hoverTask?.cancel()
         if hovering {
             guard let url = Self.firstURL(in: text) else { return }
-            hoverTask = Task {
+            // @MainActor is load-bearing: a bare Task in a View method runs on
+            // a background executor, and @State written off-main is dropped —
+            // the popover presented with no content.
+            hoverTask = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1.2))
                 guard !Task.isCancelled else { return }
-                previewURL = url
-                showLinkPreview = true
+                linkPreviewLog.info("presenting preview: \(url.absoluteString, privacy: .public)")
+                hoverPreview = PreviewLink(id: url.absoluteString, url: url)
             }
         } else {
-            hoverTask = Task {
-                try? await Task.sleep(for: .seconds(0.3))
+            hoverTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(0.6))
                 guard !Task.isCancelled else { return }
-                showLinkPreview = false
+                hoverPreview = nil
             }
         }
     }
@@ -171,6 +179,7 @@ private struct LinkHoverPreview: View {
     @State private var title: String?
     @State private var image: NSImage?
     @State private var loading = true
+    @State private var failed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -189,6 +198,10 @@ private struct LinkHoverPreview: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
                 if loading { Spacer(); ProgressView().controlSize(.mini) }
             }
+            if failed {
+                Text("No preview available — click to open")
+                    .font(.system(size: 11)).foregroundStyle(.tertiary)
+            }
         }
         .padding(12)
         .frame(width: 320, alignment: .leading)
@@ -196,9 +209,15 @@ private struct LinkHoverPreview: View {
         .onTapGesture { NSWorkspace.shared.open(url) }
         .task {
             defer { loading = false }
-            guard let md = try? await LinkMetadataCache.shared.metadata(for: url) else { return }
-            title = md.title
-            image = await LinkMetadataCache.image(from: md)
+            do {
+                let md = try await LinkMetadataCache.shared.metadata(for: url)
+                linkPreviewLog.info("metadata ok: \(md.title ?? "(no title)", privacy: .public)")
+                title = md.title
+                image = await LinkMetadataCache.image(from: md)
+            } catch {
+                linkPreviewLog.error("metadata failed \(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                failed = true
+            }
         }
     }
 }
