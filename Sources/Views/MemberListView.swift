@@ -1,10 +1,12 @@
 import SwiftUI
 
 /// Member list (detail pane): grouped by Operators / Voiced / Members with
-/// presence dots, mode glyphs and a per-member context menu.
+/// presence dots, mode glyphs and a per-member context menu. A real List, so
+/// rows select on click and highlight natively under right-click.
 struct MemberListView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
+    @State private var selectedNick: String?
 
     private var conv: Conversation? { model.selectedConversation }
 
@@ -17,13 +19,15 @@ struct MemberListView: View {
             .padding(.horizontal, 14).padding(.top, 11).padding(.bottom, 8)
             Divider()
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    group("Operators", members(.op))
-                    group("Voiced", members(.voice))
-                    group("Members", members(.regular))
-                }
-                .padding(.vertical, 6)
+            List(selection: $selectedNick) {
+                group("Operators", members(.op))
+                group("Voiced", members(.voice))
+                group("Members", members(.regular))
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .contextMenu(forSelectionType: String.self) { nicks in
+                if let nick = nicks.first { memberMenu(nick) }
             }
         }
         .background(.regularMaterial)
@@ -37,10 +41,46 @@ struct MemberListView: View {
 
     @ViewBuilder private func group(_ title: String, _ list: [Member]) -> some View {
         if !list.isEmpty {
-            Text("\(title) — \(list.count)")
-                .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.tertiary)
-                .padding(.horizontal, 12).padding(.top, 8).padding(.bottom, 3)
-            ForEach(list) { m in MemberRow(member: m) }
+            Section {
+                ForEach(list) { m in
+                    MemberRow(member: m)
+                        .tag(m.nick)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 12, bottom: 2, trailing: 12))
+                }
+            } header: {
+                Text("\(title) — \(list.count)")
+                    .font(.system(size: 10.5, weight: .semibold)).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    /// Context menu for the right-clicked member — the row highlights natively.
+    @ViewBuilder private func memberMenu(_ nick: String) -> some View {
+        Button("Whois \(nick)") { model.whois(nick) }
+        Button("Message \(nick)") { model.openDM(nick) }
+        Menu("Send ASCII Art") { ArtMenu { model.sendArt($0, toNick: nick) } }
+        Divider()
+        Button("Give Op (+o)") { model.setMode(.op, nick: nick) }
+        Button("Give Voice (+v)") { model.setMode(.voice, nick: nick) }
+        Divider()
+        Button("Kick \(nick)…", role: .destructive) { model.kickPrompt(nick) }
+        Button("Ban \(nick)…", role: .destructive) { model.banPrompt(nick) }
+        Divider()
+        Menu("Channel Service (X)") {
+            Button("Op via X") { model.xOp(nick) }
+            Button("Deop via X") { model.xDeop(nick) }
+            Button("Voice via X") { model.xVoice(nick) }
+            Button("Devoice via X") { model.xDevoice(nick) }
+            Divider()
+            Button("Kick via X…", role: .destructive) { model.xKick(nick) }
+            Button("Ban via X…", role: .destructive) { model.xBan(nick) }
+            Button("Unban via X…") { model.xUnban(nick) }
+            Divider()
+            Button("Access level") { model.xAccessUser(nick) }
+            Button("Add to userlist…") { model.xAddUser(nick) }
+            Button("Suspend…", role: .destructive) { model.xSuspend(nick) }
+            Button("Remove from userlist", role: .destructive) { model.xRemUser(nick) }
         }
     }
 }
@@ -68,34 +108,6 @@ private struct MemberRow: View {
                 .lineLimit(1)
             Spacer()
         }
-        .padding(.horizontal, 12).padding(.vertical, 3)
-        .contentShape(Rectangle())
-        .contextMenu {
-            Button("Whois \(member.nick)") { model.whois(member.nick) }
-            Button("Message \(member.nick)") { model.openDM(member.nick) }
-            Menu("Send ASCII Art") { ArtMenu { model.sendArt($0, toNick: member.nick) } }
-            Divider()
-            Button("Give Op (+o)") { model.setMode(.op, nick: member.nick) }
-            Button("Give Voice (+v)") { model.setMode(.voice, nick: member.nick) }
-            Divider()
-            Button("Kick \(member.nick)…", role: .destructive) { model.kickPrompt(member.nick) }
-            Button("Ban \(member.nick)…", role: .destructive) { model.banPrompt(member.nick) }
-            Divider()
-            Menu("Channel Service (X)") {
-                Button("Op via X") { model.xOp(member.nick) }
-                Button("Deop via X") { model.xDeop(member.nick) }
-                Button("Voice via X") { model.xVoice(member.nick) }
-                Button("Devoice via X") { model.xDevoice(member.nick) }
-                Divider()
-                Button("Kick via X…", role: .destructive) { model.xKick(member.nick) }
-                Button("Ban via X…", role: .destructive) { model.xBan(member.nick) }
-                Button("Unban via X…") { model.xUnban(member.nick) }
-                Divider()
-                Button("Access level") { model.xAccessUser(member.nick) }
-                Button("Add to userlist…") { model.xAddUser(member.nick) }
-                Button("Suspend…", role: .destructive) { model.xSuspend(member.nick) }
-                Button("Remove from userlist", role: .destructive) { model.xRemUser(member.nick) }
-            }
-        }
+        .padding(.vertical, 1)
     }
 }

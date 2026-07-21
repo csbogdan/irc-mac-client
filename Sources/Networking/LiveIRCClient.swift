@@ -40,8 +40,13 @@ actor LiveIRCClient: IRCClient {
         case "312": return "\(who) on \(p.count > 2 ? p[2] : "") (\(msg.trailing ?? ""))"
         case "313": return "\(who) is an IRC operator"
         case "317": // <me> <nick> <idle> <signon> :seconds idle, signon time
-            let idle = p.count > 2 ? p[2] : ""
-            return "\(who) has been idle \(idle)s"
+            var line = "\(who) has been idle \(Self.duration(seconds: Int(p.count > 2 ? p[2] : "") ?? 0))"
+            if p.count > 3, let ts = TimeInterval(p[3]), ts > 0 {
+                let f = DateFormatter()
+                f.dateFormat = "MMM d, HH:mm"
+                line += " — signed on \(f.string(from: Date(timeIntervalSince1970: ts)))"
+            }
+            return line
         case "319": return "\(who) on channels: \(msg.trailing ?? "")"
         case "330": return "\(who) \(msg.trailing ?? "is logged in as") \(p.count > 2 ? p[2] : "")"
         case "338": return "\(who) actual host: \(p.dropFirst(2).joined(separator: " ")) \(msg.trailing ?? "")"
@@ -50,6 +55,15 @@ actor LiveIRCClient: IRCClient {
         case "318": return "End of /WHOIS for \(who)"
         default:    return msg.trailing ?? msg.params.dropFirst().joined(separator: " ")
         }
+    }
+
+    /// 62 → "1m 2s", 8040 → "2h 14m", …
+    private static func duration(seconds: Int) -> String {
+        let d = seconds / 86400, h = (seconds % 86400) / 3600, m = (seconds % 3600) / 60, s = seconds % 60
+        if d > 0 { return "\(d)d \(h)h" }
+        if h > 0 { return "\(h)h \(m)m" }
+        if m > 0 { return "\(m)m \(s)s" }
+        return "\(s)s"
     }
 
     /// Parse a NAMES token like "@nick", "+nick", "~nick" into a Member with mode.
@@ -484,7 +498,9 @@ actor LiveIRCClient: IRCClient {
         rawSend(IRCParser.serialize(command: "NICK", params: [nick]))
     }
     func whois(nick: String, conversationID: String) async {
-        rawSend(IRCParser.serialize(command: "WHOIS", params: [nick]))
+        // "WHOIS <nick> <nick>" queries the server the user is ON — required
+        // for idle time (317) and away status (301) to come back.
+        rawSend(IRCParser.serialize(command: "WHOIS", params: [nick, nick]))
     }
     func setMode(_ mode: MemberMode, nick: String, conversationID: String) async {
         let target = String(conversationID.split(separator: "/").last ?? "")

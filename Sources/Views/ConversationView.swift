@@ -7,6 +7,7 @@ struct ConversationView: View {
     @State private var atBottom = true
     @State private var editingTopic = false
     @State private var topicDraft = ""
+    @State private var rows: [MessageRow] = []
 
     private var conv: Conversation? { model.selectedConversation }
     private var net: Network? { model.selectedNetwork }
@@ -27,6 +28,7 @@ struct ConversationView: View {
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .onChange(of: rowsKey, initial: true) { _, _ in rows = computeRows() }
     }
 
     // MARK: Topic bar
@@ -109,8 +111,10 @@ struct ConversationView: View {
                     Button { atBottom = true; withAnimation { proxy.scrollTo("BOTTOM") } } label: {
                         Label("Jump to latest", systemImage: "arrow.down")
                             .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 12).padding(.vertical, 7)
                     }
-                    .buttonStyle(.borderedProminent).tint(.gray)
+                    .buttonStyle(.plain)
+                    .relayGlass(cornerRadius: 15, interactive: true)
                     .padding(.trailing, 18).padding(.bottom, 14)
                 }
             }
@@ -125,7 +129,14 @@ struct ConversationView: View {
         }
     }
 
-    private var rows: [MessageRow] {
+    /// Rows are cached in @State and recomputed only when these inputs change.
+    /// Re-grouping the whole scrollback on every unrelated model update (e.g.
+    /// traffic arriving in *other* channels) made busy sessions laggy.
+    private var rowsKey: String {
+        "\(model.selectedID)|\(conv?.messages.count ?? 0)|\(conv?.firstUnreadID ?? "")|\(model.searchOpen ? model.searchText : "")"
+    }
+
+    private func computeRows() -> [MessageRow] {
         guard let conv else { return [] }
         return MessageGrouper.rows(for: conv, selfNick: model.selfNick, keywords: model.highlightKeywords,
                                    searchQuery: model.searchOpen ? model.searchText : nil)

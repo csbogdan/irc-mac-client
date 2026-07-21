@@ -94,11 +94,13 @@ struct Message: Identifiable, Hashable {
 
     var isJoinPartQuit: Bool { kind == .join || kind == .part || kind == .quit }
 
-    var timeString: String {
+    // DateFormatter init is expensive — one shared instance, never per-row.
+    private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "H:mm"
-        return f.string(from: timestamp)
-    }
+        return f
+    }()
+    var timeString: String { Message.timeFormatter.string(from: timestamp) }
 }
 
 // MARK: - Conversation

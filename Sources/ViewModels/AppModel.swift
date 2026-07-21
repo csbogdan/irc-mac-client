@@ -255,6 +255,8 @@ final class AppModel {
     private func appendMessage(to convID: String, _ message: Message, incoming: Bool = false) {
         guard var c = conversations[convID] else { return }
         c.messages.append(message)
+        // Cap scrollback so a flooded channel can't grow unboundedly laggy.
+        if c.messages.count > 2000 { c.messages.removeFirst(c.messages.count - 1500) }
         if incoming && convID != selectedID && countsAsActivity(message, in: c) {
             c.unread += 1
             if c.firstUnreadID == nil { c.firstUnreadID = message.id }
@@ -435,9 +437,11 @@ final class AppModel {
                 .map(\.name)
             return Array(Set(chans)).filter { $0.lowercased().hasPrefix(q) }.sorted()
         }
-        // otherwise nick completion from the active channel only
+        // otherwise nick completion from the active channel only — sorted so
+        // Tab-cycling walks the matches in a predictable order
         guard let members = selectedConversation?.members else { return [] }
         return members.map(\.nick).filter { $0.lowercased().hasPrefix(q) }
+            .sorted { $0.lowercased() < $1.lowercased() }
     }
 
     // MARK: - ASCII art
@@ -448,6 +452,7 @@ final class AppModel {
         let target = nick ?? (selectedConversation?.kind == .directMessage ? selectedConversation?.name : "")
         let text = ArtCatalog.render(art.template, nick: target ?? "")
         Task { await client.send(text: text, to: selectedID) }
+        echoOwn(text, kind: .message, to: selectedID)   // IRC never echoes your own PRIVMSG
     }
 
     // MARK: - Channel modes (Undernet)
@@ -803,7 +808,7 @@ final class AppModel {
             }
             if cfg.joinDelay > 0 { try? await Task.sleep(for: .seconds(cfg.joinDelay)) }
             for channel in cfg.autoJoinChannels {
-                await self?.joinOnConnect(channel, networkID: networkID)
+                self?.joinOnConnect(channel, networkID: networkID)
             }
         }
     }

@@ -31,13 +31,51 @@ enum Theme {
 
     static let avatarSize: CGFloat = 34
     static let windowCornerRadius: CGFloat = 11
-    static let composerCornerRadius: CGFloat = 11
+    static let composerCornerRadius: CGFloat = 17
+
+    /// Liquid Glass configuration (macOS 26+ only — callers gate availability).
+    @available(macOS 26.0, *)
+    static func glass(tint: Color?, interactive: Bool) -> Glass {
+        var g: Glass = .regular
+        if let tint { g = g.tint(tint) }
+        if interactive { g = g.interactive() }
+        return g
+    }
+}
+
+/// Chrome surfaces: Liquid Glass on macOS 26+, material + hairline fallback below.
+extension View {
+    @ViewBuilder
+    func relayGlass(cornerRadius: CGFloat, tint: Color? = nil, interactive: Bool = false) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(macOS 26.0, *) {
+            self.glassEffect(Theme.glass(tint: tint, interactive: interactive), in: shape)
+        } else {
+            self.background(shape.fill(.regularMaterial))
+                .overlay(shape.strokeBorder(.separator))
+        }
+    }
+
+    @ViewBuilder
+    func relayGlassCircle(tint: Color? = nil) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(Theme.glass(tint: tint, interactive: true), in: Circle())
+        } else {
+            self.background(Circle().fill(tint ?? Color.secondary.opacity(0.25)))
+        }
+    }
 }
 
 /// AttributedString builder: mIRC color/format codes + clickable URLs +
 /// self-mention emphasis.
 enum RichText {
+    // Rendering runs NSDataDetector + a full character scan — cache per line so
+    // scrolling and unrelated re-renders never re-parse the same messages.
+    private static var cache: [String: AttributedString] = [:]
+
     static func render(_ text: String, selfNick: String, dark: Bool) -> AttributedString {
+        let key = "\(dark ? "d" : "l")|\(selfNick)|\(text)"
+        if let hit = cache[key] { return hit }
         var attr = parseMIRC(text, dark: dark)
         let plain = String(attr.characters)
 
@@ -58,6 +96,8 @@ enum RichText {
             attr[r].foregroundColor = .white
             attr[r].font = .system(size: 14, weight: .semibold)
         }
+        if cache.count > 4000 { cache.removeAll(keepingCapacity: true) }
+        cache[key] = attr
         return attr
     }
 

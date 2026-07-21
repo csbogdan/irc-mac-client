@@ -40,14 +40,18 @@ struct ComposerView: View {
                     .lineLimit(1...5)
                     .font(.system(size: 13.5))
                     .focused($focused)
-                    .padding(.horizontal, 11).padding(.vertical, 7)
-                    .background(RoundedRectangle(cornerRadius: Theme.composerCornerRadius).fill(.quaternary.opacity(0.6)))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.composerCornerRadius).strokeBorder(.separator))
+                    .padding(.horizontal, 13).padding(.vertical, 8)
+                    .relayGlass(cornerRadius: Theme.composerCornerRadius)
                     .onKeyPress(.tab) { handleTab() }
                     .onKeyPress(.return) { handleReturn() }
                     .onKeyPress(.upArrow) { slashOpen ? moveSlash(-1) : .ignored }
                     .onKeyPress(.downArrow) { slashOpen ? moveSlash(1) : .ignored }
-                    .onChange(of: draft) { _, _ in completion = nil; slashIndex = 0 }
+                    .onChange(of: draft) { _, new in
+                        // Keep cycle state alive when the change came from Tab
+                        // completion itself — reset only on real typing.
+                        if new != completion?.result { completion = nil }
+                        slashIndex = 0
+                    }
 
                 Menu {
                     ArtMenu { model.sendArt($0) }
@@ -60,9 +64,10 @@ struct ComposerView: View {
 
                 Button { send() } label: {
                     Image(systemName: "arrow.up").fontWeight(.semibold).foregroundStyle(.white)
-                        .frame(width: 30, height: 30).background(Circle().fill(Theme.mention))
+                        .frame(width: 32, height: 32)
                 }
                 .buttonStyle(.plain)
+                .relayGlassCircle(tint: Theme.mention)
             }
 
             HStack(spacing: 16) {
@@ -106,8 +111,7 @@ struct ComposerView: View {
             }
         }
         .padding(5)
-        .background(RoundedRectangle(cornerRadius: 11).fill(.regularMaterial))
-        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(.separator))
+        .relayGlass(cornerRadius: 14)
         .padding(.bottom, 8)
     }
 

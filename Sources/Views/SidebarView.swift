@@ -18,7 +18,7 @@ struct SidebarView: View {
             }
             ForEach(model.networks) { net in
                 Section {
-                    ForEach(net.conversationIDs.compactMap { model.conversations[$0] }) { conv in
+                    ForEach(ordered(net)) { conv in
                         ConversationRow(conv: conv)
                             .tag(conv.id)
                     }
@@ -28,6 +28,22 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+    }
+
+    /// Sidebar order within a network: server console first, then all
+    /// channels, then all DMs — each group keeping its join order.
+    private func ordered(_ net: Network) -> [Conversation] {
+        let convs = net.conversationIDs.compactMap { model.conversations[$0] }
+        func rank(_ c: Conversation) -> Int {
+            switch c.kind {
+            case .server: return 0
+            case .channel: return 1
+            case .directMessage: return 2
+            }
+        }
+        return convs.enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map(\.element)
     }
 }
 
@@ -96,6 +112,13 @@ private struct ConversationRow: View {
             if general > 0 { countBadge(general, Theme.mention) }
         }
         .contextMenu { contextMenu }
+        // Double-click a DM → /whois its peer (results land in that DM).
+        .simultaneousGesture(TapGesture(count: 2).onEnded {
+            if conv.kind == .directMessage {
+                model.select(conv.id)
+                model.whois(conv.name)
+            }
+        })
     }
 
     private func countBadge(_ n: Int, _ color: Color) -> some View {

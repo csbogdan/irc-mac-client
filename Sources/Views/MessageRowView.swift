@@ -1,4 +1,5 @@
 import SwiftUI
+import LinkPresentation
 
 /// Renders one display row. Modern grouped layout: avatar gutter + name/time
 /// header + body, with distinct treatments for actions, notices, server lines
@@ -9,6 +10,11 @@ struct MessageRowView: View {
     let row: MessageRow
 
     private let gutter: CGFloat = 45  // avatar column (34) + spacing
+
+    // Hover link preview
+    @State private var showLinkPreview = false
+    @State private var previewURL: URL?
+    @State private var hoverTask: Task<Void, Never>?
 
     var body: some View {
         switch row {
@@ -69,6 +75,10 @@ struct MessageRowView: View {
                 }
                 Text(RichText.render(m.text, selfNick: model.selfNick, dark: scheme == .dark))
                     .font(.system(size: 14)).textSelection(.enabled)
+                    .onHover { hovering in linkHover(hovering, text: m.text) }
+                    .popover(isPresented: $showLinkPreview, arrowEdge: .bottom) {
+                        if let url = previewURL { LinkHoverPreview(url: url) }
+                    }
                 if let p = m.preview { PreviewCard(preview: p) }
             }
             Spacer(minLength: 0)
@@ -92,6 +102,97 @@ struct MessageRowView: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(m.text, forType: .string)
             }
+        }
+    }
+
+    /// Hovering a message that contains a URL pops a small preview after a
+    /// short delay (and closes it shortly after the pointer leaves).
+    private func linkHover(_ hovering: Bool, text: String) {
+        hoverTask?.cancel()
+        if hovering {
+            guard let url = Self.firstURL(in: text) else { return }
+            hoverTask = Task {
+                try? await Task.sleep(for: .seconds(1.2))
+                guard !Task.isCancelled else { return }
+                previewURL = url
+                showLinkPreview = true
+            }
+        } else {
+            hoverTask = Task {
+                try? await Task.sleep(for: .seconds(0.3))
+                guard !Task.isCancelled else { return }
+                showLinkPreview = false
+            }
+        }
+    }
+
+    private static func firstURL(in text: String) -> URL? {
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let ns = text as NSString
+        let match = detector?.firstMatch(in: text, range: NSRange(location: 0, length: ns.length))
+        guard let url = match?.url, url.scheme?.hasPrefix("http") == true else { return nil }
+        return url
+    }
+}
+
+// MARK: - Hover link preview (LinkPresentation)
+
+/// Fetches and caches LPLinkMetadata so re-hovering a link is instant.
+@MainActor
+final class LinkMetadataCache {
+    static let shared = LinkMetadataCache()
+    private var cache: [URL: LPLinkMetadata] = [:]
+
+    func metadata(for url: URL) async throws -> LPLinkMetadata {
+        if let hit = cache[url] { return hit }
+        let md = try await LPMetadataProvider().startFetchingMetadata(for: url)
+        cache[url] = md
+        return md
+    }
+
+    static func image(from md: LPLinkMetadata) async -> NSImage? {
+        guard let provider = md.imageProvider else { return nil }
+        return await withCheckedContinuation { cont in
+            provider.loadObject(ofClass: NSImage.self) { obj, _ in
+                cont.resume(returning: obj as? NSImage)
+            }
+        }
+    }
+}
+
+private struct LinkHoverPreview: View {
+    let url: URL
+    @State private var title: String?
+    @State private var image: NSImage?
+    @State private var loading = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let image {
+                Image(nsImage: image)
+                    .resizable().aspectRatio(contentMode: .fill)
+                    .frame(width: 296, height: 150).clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            if let title {
+                Text(title).font(.system(size: 12.5, weight: .semibold)).lineLimit(3)
+            }
+            HStack(spacing: 5) {
+                Image(systemName: "link").font(.system(size: 10)).foregroundStyle(.tertiary)
+                Text(url.host() ?? url.absoluteString)
+                    .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                if loading { Spacer(); ProgressView().controlSize(.mini) }
+            }
+        }
+        .padding(12)
+        .frame(width: 320, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture { NSWorkspace.shared.open(url) }
+        .task {
+            defer { loading = false }
+            guard let md = try? await LinkMetadataCache.shared.metadata(for: url) else { return }
+            title = md.title
+            image = await LinkMetadataCache.image(from: md)
         }
     }
 }

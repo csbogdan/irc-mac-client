@@ -29,7 +29,18 @@ private func rainbow(_ s: String) -> String {
 
 enum ArtCatalog {
     static func render(_ template: String, nick: String) -> String {
-        template.replacingOccurrences(of: "%nick%", with: nick)
+        // Fast path: plain placeholder.
+        var s = template.replacingOccurrences(of: "%nick%", with: nick)
+        // rainbow() interleaves a color code between every character, splitting
+        // the placeholder into %·n·i·c·k·% — a plain string replace can't see
+        // it. Match the placeholder with any mIRC control codes in between; the
+        // substituted nick inherits the color active at the match start.
+        let ctl = "(?:\u{03}\\d{1,2}(?:,\\d{1,2})?|[\u{03}\u{02}\u{0F}\u{1D}\u{1F}\u{16}])*"
+        s = s.replacingOccurrences(
+            of: "%\(ctl)n\(ctl)i\(ctl)c\(ctl)k\(ctl)%",
+            with: NSRegularExpression.escapedTemplate(for: nick),
+            options: .regularExpression)
+        return s
     }
 
     static let groups: [(name: String, lines: [ArtLine])] = [

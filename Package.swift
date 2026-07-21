@@ -10,7 +10,8 @@ let package = Package(
         .target(
             name: "RelayIRC",
             path: "Sources",
-            exclude: ["App/RelayApp.swift"]   // @main app entry lives in the Xcode app target
+            exclude: ["App/RelayApp.swift",   // @main app entry lives in the Xcode app target
+                      "Assets.xcassets"]      // app icon — compiled by the app target only
         ),
         .testTarget(
             name: "RelayIRCTests",

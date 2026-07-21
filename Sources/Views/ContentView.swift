@@ -21,6 +21,10 @@ struct ContentView: View {
                         .transition(.move(edge: .trailing))
                 }
             }
+            // Native titlebar title/subtitle — a .principal toolbar VStack gets
+            // wrapped in its own glass capsule on macOS 26 and looks broken.
+            .navigationTitle(headerTitle)
+            .navigationSubtitle(headerSubtitle)
         }
         .toolbar { toolbar }
         .sheet(isPresented: $model.quickSwitcherOpen) { QuickSwitcherView() }
@@ -38,12 +42,6 @@ struct ContentView: View {
                 Label("Quick Switcher", systemImage: "command")
             }
             .help("Quick Switcher (⌘K)")
-        }
-        ToolbarItemGroup(placement: .principal) {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(headerTitle).font(.headline)
-                Text(headerSubtitle).font(.caption).foregroundStyle(.tertiary)
-            }
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { if model.selectedConversation?.kind == .channel { model.searchOpen.toggle() } } label: {
