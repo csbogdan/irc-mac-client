@@ -328,8 +328,6 @@ private struct ArtSettings: View {
 
 private struct AppearanceSettings: View {
     @Binding var appearance: String
-    @AppStorage("accent") private var accent = Theme.Accent.graphite.rawValue
-    @AppStorage("density") private var density = Theme.Density.comfortable.rawValue
     @AppStorage("showTimestamps") private var showTimestamps = true
 
     var body: some View {
@@ -337,12 +335,6 @@ private struct AppearanceSettings: View {
             Picker("Appearance", selection: $appearance) {
                 Text("System").tag("system"); Text("Light").tag("light"); Text("Dark").tag("dark")
             }.pickerStyle(.segmented)
-            Picker("Accent", selection: $accent) {
-                ForEach(Theme.Accent.allCases) { Text($0.rawValue.capitalized).tag($0.rawValue) }
-            }
-            Picker("Density", selection: $density) {
-                ForEach(Theme.Density.allCases) { Text($0.rawValue.capitalized).tag($0.rawValue) }
-            }
             Toggle("Show timestamps", isOn: $showTimestamps)
         }
         .formStyle(.grouped).padding()

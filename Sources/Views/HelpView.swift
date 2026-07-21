@@ -30,7 +30,7 @@ struct HelpView: View {
 // MARK: - Topics
 
 enum HelpTopic: String, CaseIterable, Identifiable {
-    case welcome, gettingStarted, connecting, sidebar, channels, talking, composerTricks,
+    case welcome, gettingStarted, settings, connecting, sidebar, channels, talking, composerTricks,
          directMessages, notifications, blocking, privateSessions, xService, asciiArt,
          commands, shortcuts, troubleshooting
 
@@ -40,6 +40,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         switch self {
         case .welcome:         return "Welcome"
         case .gettingStarted:  return "Getting Started"
+        case .settings:        return "Settings Explained"
         case .connecting:      return "Connecting & Reconnecting"
         case .sidebar:         return "The Sidebar"
         case .channels:        return "Channels"
@@ -61,6 +62,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         switch self {
         case .welcome:         return "hand.wave"
         case .gettingStarted:  return "power"
+        case .settings:        return "gearshape"
         case .connecting:      return "bolt.horizontal"
         case .sidebar:         return "sidebar.left"
         case .channels:        return "number"
@@ -103,6 +105,57 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Field("Authenticate with SASL", "logs you into your registered account (if the network supports it) during connect — before anyone can see you.")
             Field("Connect on launch", "opens this connection automatically when Relay starts.")
             Field("Reconnect automatically", "if the line drops, Relay redials it for you (see Connecting & Reconnecting).")
+            Note("Every other switch — user modes, perform commands, auto-join, art, notifications — is covered field by field in Settings Explained (next page).")
+        }
+
+        case .settings: HelpPage {
+            P("Everything in Settings (⌘,), tab by tab, switch by switch.")
+
+            H("Connections — the server list")
+            Bullet("Left side: your servers. + adds one, − deletes the selected one. The dot shows its live state; Connect/Disconnect sits at the top of the editor.")
+            P("The Server, Identity and Authentication fields are covered in Getting Started. Below are the rest:")
+
+            H("User Modes (set on connect)")
+            P("Switches the server flips on you automatically, right after every connect:")
+            Field("+i Invisible", "hides you from /who and /names for people not in a channel with you.")
+            Field("+w Wallops", "receive network-wide announcements from IRC operators.")
+            Field("+d Deaf", "stop receiving channel chat; you still see joins, parts, topics and modes.")
+            Field("+x Hidden host", "masks your address as account.users.undernet.org — needs an X login (put it in On Connect below). Recommended.")
+
+            H("On Connect — the perform list")
+            P("Commands Relay types for you after every connect, top to bottom. This is where logins go.")
+            Bullet("Each row is one command plus a delay in seconds. The delay is a wait BEFORE that command is sent — use it to let the connection settle or a previous login land.")
+            Bullet("Write commands exactly as you'd type them in the message box (/msg x@channels.undernet.org login name pass) or as raw IRC (MODE %nick% +x).")
+            Bullet("%nick% is replaced with your current nickname — useful because your nick can change on collision.")
+            Bullet("Drag rows to reorder; the − removes one. The whole list always finishes before any channel is joined.")
+            Note("Classic Undernet setup: row 1 = your X login. Combined with the +x user mode, your real address is hidden before you enter a single room.")
+
+            H("Delay before joining channels")
+            P("An extra pause (seconds) between the last perform command and the channel joins — give a login a moment to take effect so you join rooms with your host already masked.")
+
+            H("Auto-join Channels")
+            P("The rooms Relay enters for you on every connect (after the performs and the delay). Type a name and press Add — the # is optional, Relay adds it. The − removes one. After an automatic reconnect, Relay also rejoins whatever else was open in your sidebar.")
+
+            H("Options")
+            Field("Connect on launch", "this network dials as soon as Relay starts.")
+            Field("Reconnect automatically", "redial with growing pauses when the connection drops unexpectedly.")
+
+            H("ASCII Art tab")
+            Bullet("Your personal art lines, available under 🎨 → My Art and in right-click menus.")
+            Bullet("Name = the menu label. Template = the actual line; put %nick% where a name should go.")
+            Bullet("Colours are mIRC codes (the \\u{3} control character + a colour number 0–15). The dark strip under each row previews exactly what will be sent.")
+
+            H("Appearance tab")
+            Field("Appearance", "System, Light or Dark — follows or overrides macOS.")
+            Field("Show timestamps", "the small clock next to names in chat. Off = cleaner, denser look.")
+
+            H("Notifications tab")
+            Field("Notify on mentions", "a Notification Center banner when someone says your name (or a keyword) in a channel — only while Relay is in the background.")
+            Field("Notify on direct messages", "same, for private messages.")
+            Field("Dock icon count", "the total unread number on Relay's Dock icon.")
+            Field("Highlight keywords", "extra words that count as mentions — red badge, highlight and notification. Your nickname always counts; add project names, your real name, topics you care about.")
+
+            Note("Channel-specific settings (modes, bans, topic) live on the channel itself: double-click the topic bar. X service options (AUTOJOIN, AUTOTOPIC, floating limits…) are under the toolbar sliders → Channel Settings (X) — see The X Service page.")
         }
 
         case .connecting: HelpPage {
@@ -237,6 +290,10 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             H("On a channel (right-click it in the sidebar → Channel Service)")
             Bullet("Channel Info, Access List, Ban List — ask X what it knows.")
             Bullet("Set Topic, Invite Me, Op Me, Deop Me, Clear Modes.")
+            H("X channel settings (toolbar sliders → Channel Settings (X))")
+            P("For channels you manage, a sheet drives X's per-channel options: AUTOJOIN (X rejoins after downtime), AUTOTOPIC (reset topic every 30 min), NOOP / STRICTOP (who may be opped), the floating user limit (FLOATLIM and friends), MASSDEOPPRO (anti-takeover), plus DESCRIPTION, URL and KEYWORDS. Each control explains itself in the sheet.")
+            P("Your personal X options are there too: INVISIBLE (hide your X status), NOADDUSER (nobody can add you to channel lists), LANG (X's reply language).")
+
             H("When a channel won't let you in")
             P("Relay recognises the four refusals and offers the fix in a dialog:")
             Field("Full (+l)", "a Try Again button.")

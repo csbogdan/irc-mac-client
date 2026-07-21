@@ -80,6 +80,14 @@ struct ComposerView: View {
             .padding(.top, 6).padding(.horizontal, 4)
         }
         .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 14)
+        // The composer should just BE focused — on open, on every conversation
+        // switch, and whenever the app comes to the front. No hunting for a
+        // small box with the mouse.
+        .onAppear { focused = true }
+        .onChange(of: model.selectedID) { _, _ in focused = true }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            focused = true
+        }
     }
 
     private var placeholder: String {
