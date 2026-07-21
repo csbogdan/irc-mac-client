@@ -216,6 +216,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Bullet("A message that mentions you gets a blue edge marker and your name in a pill.")
             Bullet("Old-style colour codes from other clients (mIRC colours) are rendered properly.")
             Bullet("Hover a message containing a link for a second — a small preview card pops up. Click it to open the page.")
+            Bullet("Click a name in chat to find that person in the member list; right-click the name for the full member menu (message, op, kick, X, …).")
             Bullet("Select text with the mouse and copy as usual; right-click a message for Copy Message and per-person actions.")
             H("Finding things")
             Bullet("⌘F searches inside the current channel. Matching lines only; press the ✕ to go back.")

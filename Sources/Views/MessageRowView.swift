@@ -68,6 +68,8 @@ struct MessageRowView: View {
                         .fill(NickColor.color(for: m.nick, dark: scheme == .dark))
                         .overlay(Text(NickColor.monogram(m.nick))
                             .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white))
+                        .onTapGesture { model.revealMember(m.nick) }
+                        .contextMenu { MemberActionsMenu(nick: m.nick) }
                 } else { Color.clear }
             }
             .frame(width: Theme.avatarSize, height: Theme.avatarSize)
@@ -75,7 +77,12 @@ struct MessageRowView: View {
             VStack(alignment: .leading, spacing: 2) {
                 if showHeader {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        // Click a nick → reveal in the member list; right-click
+                        // → the same full menu as the member list.
                         Text(m.nick).font(.system(size: 13.5, weight: .semibold))
+                            .onTapGesture { model.revealMember(m.nick) }
+                            .contextMenu { MemberActionsMenu(nick: m.nick) }
+                            .help("Click to show in member list")
                         if showTimestamps {
                             Text(m.timeString).font(.system(size: 11)).foregroundStyle(.tertiary)
                         }

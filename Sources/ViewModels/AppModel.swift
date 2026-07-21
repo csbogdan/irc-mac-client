@@ -39,6 +39,8 @@ final class AppModel {
     var channelList: [ChannelListItem] = []
     var commandPrompt: CommandPrompt?
     var joinFailure: JoinFailure?
+    /// Set to a nick to highlight + scroll it in the member list (cleared there).
+    var revealedMember: String?
     @ObservationIgnored private var whoisTargetConvID: String?
 
     // Composer input history (↑/↓ recall), auto-reconnect and private-session
@@ -566,6 +568,12 @@ final class AppModel {
         Task { await client.whois(nick: nick, conversationID: selectedID) }
     }
     func setMode(_ mode: MemberMode, nick: String) { Task { await client.setMode(mode, nick: nick, conversationID: selectedID) } }
+
+    /// Clicking a nick in chat: open the member panel and spotlight them.
+    func revealMember(_ nick: String) {
+        memberListVisible = true
+        revealedMember = nick
+    }
     func kick(_ nick: String) { Task { await client.kick(nick: nick, conversationID: selectedID) } }
     func markRead(_ id: String) {
         mutateConversation(id) { $0.unread = 0; $0.mentions = 0; $0.firstUnreadID = nil }

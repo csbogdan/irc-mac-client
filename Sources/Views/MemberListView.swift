@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Member list (detail pane): grouped by Operators / Voiced / Members with
 /// presence dots, mode glyphs and a per-member context menu. A real List, so
-/// rows select on click and highlight natively under right-click.
+/// rows select on click and highlight natively under right-click. Clicking a
+/// nick in chat reveals (selects + scrolls to) that member here.
 struct MemberListView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
@@ -19,15 +20,27 @@ struct MemberListView: View {
             .padding(.horizontal, 14).padding(.top, 11).padding(.bottom, 8)
             Divider()
 
-            List(selection: $selectedNick) {
-                group("Operators", members(.op))
-                group("Voiced", members(.voice))
-                group("Members", members(.regular))
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .contextMenu(forSelectionType: String.self) { nicks in
-                if let nick = nicks.first { memberMenu(nick) }
+            ScrollViewReader { proxy in
+                List(selection: $selectedNick) {
+                    group("Operators", members(.op))
+                    group("Voiced", members(.voice))
+                    group("Members", members(.regular))
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .contextMenu(forSelectionType: String.self) { nicks in
+                    if let nick = nicks.first { MemberActionsMenu(nick: nick) }
+                }
+                .onChange(of: model.revealedMember) { _, nick in
+                    guard let nick else { return }
+                    // Match case-insensitively — chat casing may differ.
+                    let target = conv?.members.first {
+                        $0.nick.caseInsensitiveCompare(nick) == .orderedSame
+                    }?.nick ?? nick
+                    selectedNick = target
+                    withAnimation { proxy.scrollTo(target) }
+                    model.revealedMember = nil
+                }
             }
         }
         .background(.regularMaterial)
@@ -54,36 +67,45 @@ struct MemberListView: View {
             }
         }
     }
+}
 
-    /// Context menu for the right-clicked member — the row highlights natively.
-    @ViewBuilder private func memberMenu(_ nick: String) -> some View {
+/// The full per-person action menu — shared by the member list and by nicks in
+/// chat, so the two can never drift apart. Channel-only actions (op, kick, X)
+/// appear only when a channel is selected.
+struct MemberActionsMenu: View {
+    @Environment(AppModel.self) private var model
+    let nick: String
+
+    var body: some View {
         Button("Whois \(nick)") { model.whois(nick) }
         Button("Message \(nick)") { model.openDM(nick) }
         Menu("Send ASCII Art") { ArtMenu { model.sendArt($0, toNick: nick) } }
         Divider()
-        Button("Give Op (+o)") { model.setMode(.op, nick: nick) }
-        Button("Give Voice (+v)") { model.setMode(.voice, nick: nick) }
-        Divider()
-        Button("Kick \(nick)…", role: .destructive) { model.kickPrompt(nick) }
-        Button("Ban \(nick)…", role: .destructive) { model.banPrompt(nick) }
-        Divider()
         Button(model.isIgnored(nick) ? "Unignore \(nick)" : "Ignore \(nick)") { model.toggleIgnore(nick) }
         Button("Silence \(nick) (server-side)") { model.silence(nick) }
-        Divider()
-        Menu("Channel Service (X)") {
-            Button("Op via X") { model.xOp(nick) }
-            Button("Deop via X") { model.xDeop(nick) }
-            Button("Voice via X") { model.xVoice(nick) }
-            Button("Devoice via X") { model.xDevoice(nick) }
+        if model.selectedConversation?.kind == .channel {
             Divider()
-            Button("Kick via X…", role: .destructive) { model.xKick(nick) }
-            Button("Ban via X…", role: .destructive) { model.xBan(nick) }
-            Button("Unban via X…") { model.xUnban(nick) }
+            Button("Give Op (+o)") { model.setMode(.op, nick: nick) }
+            Button("Give Voice (+v)") { model.setMode(.voice, nick: nick) }
             Divider()
-            Button("Access level") { model.xAccessUser(nick) }
-            Button("Add to userlist…") { model.xAddUser(nick) }
-            Button("Suspend…", role: .destructive) { model.xSuspend(nick) }
-            Button("Remove from userlist", role: .destructive) { model.xRemUser(nick) }
+            Button("Kick \(nick)…", role: .destructive) { model.kickPrompt(nick) }
+            Button("Ban \(nick)…", role: .destructive) { model.banPrompt(nick) }
+            Divider()
+            Menu("Channel Service (X)") {
+                Button("Op via X") { model.xOp(nick) }
+                Button("Deop via X") { model.xDeop(nick) }
+                Button("Voice via X") { model.xVoice(nick) }
+                Button("Devoice via X") { model.xDevoice(nick) }
+                Divider()
+                Button("Kick via X…", role: .destructive) { model.xKick(nick) }
+                Button("Ban via X…", role: .destructive) { model.xBan(nick) }
+                Button("Unban via X…") { model.xUnban(nick) }
+                Divider()
+                Button("Access level") { model.xAccessUser(nick) }
+                Button("Add to userlist…") { model.xAddUser(nick) }
+                Button("Suspend…", role: .destructive) { model.xSuspend(nick) }
+                Button("Remove from userlist", role: .destructive) { model.xRemUser(nick) }
+            }
         }
     }
 }
