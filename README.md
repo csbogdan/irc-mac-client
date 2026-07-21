@@ -11,7 +11,7 @@ Liquid Glass looks. mIRC soul.
 ![Platform](https://img.shields.io/badge/macOS-14%2B-black)
 ![Swift](https://img.shields.io/badge/Swift-5.9-F05138)
 ![Built for](https://img.shields.io/badge/tuned%20for-Undernet-6A5ACD)
-[![License](https://img.shields.io/github/license/csbogdan/irc-mac-client?color=34C759)](LICENSE)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-blue)](LICENSE)
 
 </div>
 
@@ -57,12 +57,12 @@ IRC is the internet's original group chat — running since 1988, still alive, s
 |---|---|
 | <img src="docs/screenshots/join-error.png" alt="Invite-only channel — Ask X for an Invite"> | <img src="docs/screenshots/settings.png" alt="Connections settings"> |
 
-| Hover a link, see the page |
-|---|
-| <img src="docs/screenshots/link-preview.png" alt="Hover link preview popover"> |
+| Hover a link, see the page | A manual humans can read |
+|---|---|
+| <img src="docs/screenshots/link-preview.png" alt="Hover link preview popover"> | <img src="docs/screenshots/help.png" alt="Built-in manual"> |
 
 <!-- pending shots
-| <img src="docs/screenshots/private-session.png" alt="Private session"> | <img src="docs/screenshots/help.png" alt="Built-in manual"> |
+| <img src="docs/screenshots/private-session.png" alt="Private session"> | |
 -->
 
 ## Install
