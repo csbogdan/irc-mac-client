@@ -7,6 +7,7 @@ import LinkPresentation
 struct MessageRowView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(AppModel.self) private var model
+    @AppStorage("showTimestamps") private var showTimestamps = true
     let row: MessageRow
 
     private let gutter: CGFloat = 45  // avatar column (34) + spacing
@@ -70,7 +71,9 @@ struct MessageRowView: View {
                 if showHeader {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(m.nick).font(.system(size: 13.5, weight: .semibold))
-                        Text(m.timeString).font(.system(size: 11)).foregroundStyle(.tertiary)
+                        if showTimestamps {
+                            Text(m.timeString).font(.system(size: 11)).foregroundStyle(.tertiary)
+                        }
                     }
                 }
                 Text(RichText.render(m.text, selfNick: model.selfNick, dark: scheme == .dark))

@@ -30,6 +30,7 @@ struct RelayApp: App {
         Window("Relay Help", id: "help") {
             HelpView()
         }
+        .defaultSize(width: 860, height: 640)
         .defaultPosition(.center)
     }
 

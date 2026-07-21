@@ -317,15 +317,28 @@ final class AppModel {
             if mention && c.kind == .channel { c.mentions += 1 }
         }
         conversations[convID] = c
-        // Notification Center: mentions + DMs. The delegate suppresses the
-        // banner while the app is frontmost, so these only surface when the
-        // app is in the background.
+        // Notification Center: mentions + DMs (honoring the Settings toggles).
+        // The delegate suppresses the banner while the app is frontmost, so
+        // these only surface when the app is in the background.
+        let wantMentions = UserDefaults.standard.object(forKey: "notifyMentions") as? Bool ?? true
+        let wantDMs = UserDefaults.standard.object(forKey: "notifyDMs") as? Bool ?? true
         if incoming, isChat, !c.isMuted,
-           c.kind == .directMessage || (c.kind == .channel && mention) {
+           (c.kind == .directMessage && wantDMs) || (c.kind == .channel && mention && wantMentions) {
             notifier.post(convID: convID,
                           title: c.kind == .channel ? "\(c.name) — \(message.nick)" : message.nick,
                           body: RichText.plain(message.text))
         }
+        updateDockBadge()
+    }
+
+    /// Total unread across all conversations on the Dock icon (Settings toggle).
+    private func updateDockBadge() {
+        guard UserDefaults.standard.object(forKey: "dockBadge") as? Bool ?? true else {
+            NSApp.dockTile.badgeLabel = nil
+            return
+        }
+        let total = conversations.values.reduce(0) { $0 + $1.unread }
+        NSApp.dockTile.badgeLabel = total > 0 ? "\(total)" : nil
     }
 
     /// In a channel, all activity (chat, joins/parts/quits/kicks, ban/mode
@@ -345,6 +358,7 @@ final class AppModel {
         selectedID = id
         searchOpen = false; searchText = ""
         mutateConversation(id) { $0.unread = 0; $0.mentions = 0; $0.firstUnreadID = nil }
+        updateDockBadge()
     }
 
     func selectIndex(_ oneBased: Int) {
@@ -384,6 +398,7 @@ final class AppModel {
     /// rejoin — identical to a manual connect.
     private func scheduleReconnectIfNeeded(_ networkID: String) {
         guard !intentionalDisconnect.contains(networkID) else { return }
+        guard config(for: networkID)?.autoReconnect != false else { return }   // honor the per-server toggle
         let attempt = reconnectAttempts[networkID, default: 0] + 1
         reconnectAttempts[networkID] = attempt
         let delay = min(300.0, pow(2.0, Double(attempt)))
@@ -543,7 +558,10 @@ final class AppModel {
     }
     func setMode(_ mode: MemberMode, nick: String) { Task { await client.setMode(mode, nick: nick, conversationID: selectedID) } }
     func kick(_ nick: String) { Task { await client.kick(nick: nick, conversationID: selectedID) } }
-    func markRead(_ id: String) { mutateConversation(id) { $0.unread = 0; $0.mentions = 0; $0.firstUnreadID = nil } }
+    func markRead(_ id: String) {
+        mutateConversation(id) { $0.unread = 0; $0.mentions = 0; $0.firstUnreadID = nil }
+        updateDockBadge()
+    }
 
     /// Quiet: no counters, no notifications from this conversation.
     func toggleMute(_ id: String) {
