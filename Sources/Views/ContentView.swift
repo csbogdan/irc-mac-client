@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var channelKey = ""
 
     var body: some View {
         @Bindable var model = model
@@ -32,7 +33,34 @@ struct ContentView: View {
         .sheet(isPresented: $model.xSettingsOpen) { XChannelSettingsView() }
         .sheet(isPresented: $model.channelListOpen) { ChannelListView() }
         .sheet(item: $model.commandPrompt) { CommandPromptView(prompt: $0) }
+        // Join refused (471/473/474/475): explain why + offer the fix.
+        .alert(model.joinFailure?.title ?? "Can't join channel",
+               isPresented: Binding(get: { model.joinFailure != nil },
+                                    set: { if !$0 { model.joinFailure = nil } }),
+               presenting: model.joinFailure) { f in
+            joinFailureActions(f)
+        } message: { f in
+            if !f.reason.isEmpty { Text(f.reason) }
+        }
         .animation(.easeInOut(duration: 0.18), value: model.memberListVisible)
+    }
+
+    @ViewBuilder private func joinFailureActions(_ f: JoinFailure) -> some View {
+        switch f.code {
+        case 475:
+            TextField("Channel key", text: $channelKey)
+            Button("Join with Key") { model.retryJoin(f, key: channelKey); channelKey = "" }
+            Button("Cancel", role: .cancel) { }
+        case 473:
+            Button("Ask X for an Invite") { model.askXInvite(f) }
+            Button("Cancel", role: .cancel) { }
+        case 474:
+            Button("Ask X to Unban Me") { model.askXUnban(f) }
+            Button("Cancel", role: .cancel) { }
+        default:
+            Button("Try Again") { model.retryJoin(f) }
+            Button("Cancel", role: .cancel) { }
+        }
     }
 
     @ToolbarContentBuilder

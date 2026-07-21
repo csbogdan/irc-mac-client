@@ -101,6 +101,11 @@ enum RichText {
         return attr
     }
 
+    /// Strip mIRC control codes → plain text (for notifications).
+    static func plain(_ text: String) -> String {
+        String(parseMIRC(text, dark: false).characters)
+    }
+
     // MARK: - mIRC formatting (\x03 color, \x02 bold, \x1D italic, \x1F underline, \x0F reset)
 
     private static func parseMIRC(_ raw: String, dark: Bool) -> AttributedString {

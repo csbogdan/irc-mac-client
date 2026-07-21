@@ -114,6 +114,15 @@ actor LiveIRCClient: IRCClient {
     // MARK: Connection lifecycle
 
     func connect(networkID: String) async {
+        // Reset per-session state — this instance is reused across reconnects.
+        registered = false
+        nickAttempt = 0
+        buffer.removeAll()
+        sendQueue.removeAll()
+        sendPump?.cancel()
+        sendTimer = .distantPast
+        namesBuffer.removeAll(); banBuffer.removeAll(); listBuffer.removeAll()
+
         emit(.stateChanged(networkID: networkID, .connecting))
         emit(.serverLine(networkID: networkID, text: "*** Connecting to \(host):\(port) (\(useTLS ? "TLS" : "plain"))…"))
 
@@ -332,6 +341,13 @@ actor LiveIRCClient: IRCClient {
             if msg.params.count >= 2 {
                 emit(.serverLine(networkID: networkID, text: "\(msg.params[1]) — \(msg.trailing ?? "is now your hidden host")"))
             }
+        case "471", "473", "474", "475":
+            // <me> <#channel> :reason — join refused (full / invite-only /
+            // banned / needs key). Surfaced as a distinct event for proper UX.
+            if msg.params.count >= 2 {
+                emit(.joinFailed(networkID: networkID, channel: msg.params[1],
+                                 code: Int(msg.command) ?? 0, reason: msg.trailing ?? ""))
+            }
         case "329", "333", "315":
             break   // creation/topic timestamps & WHO end-marker — noise
         default:
@@ -458,13 +474,43 @@ actor LiveIRCClient: IRCClient {
         emit(.serverLine(networkID: networkID, text: "[CTCP] \(cmd.uppercased()) from \(nick) → \(reply)"))
     }
 
-    // MARK: Sending
+    // MARK: Sending — paced queue (ircu "Excess Flood" protection)
+
+    // mIRC-style penalty clock: the timer may run up to ~4s ahead of now (a
+    // burst of 5 quick lines); past that every line waits so we never exceed
+    // ~1 line/sec sustained and the server never kills us for flooding.
+    private var sendQueue: [String] = []
+    private var sendPump: Task<Void, Never>?
+    private var sendTimer: Date = .distantPast
 
     private func rawSend(_ s: String) {
-        connection?.send(content: s.data(using: .utf8), completion: .contentProcessed { _ in })
+        sendQueue.append(s)
+        if sendPump == nil {
+            sendPump = Task { [weak self] in await self?.drainSendQueue() }
+        }
+    }
+
+    private func drainSendQueue() async {
+        while !sendQueue.isEmpty {
+            if Task.isCancelled { break }
+            let now = Date()
+            if sendTimer < now { sendTimer = now }
+            let ahead = sendTimer.timeIntervalSince(now)
+            if ahead > 4 {
+                try? await Task.sleep(for: .seconds(ahead - 4))
+                if Task.isCancelled { break }
+            }
+            guard !sendQueue.isEmpty else { break }
+            let line = sendQueue.removeFirst()
+            connection?.send(content: line.data(using: .utf8), completion: .contentProcessed { _ in })
+            sendTimer.addTimeInterval(1)
+        }
+        sendPump = nil
     }
 
     func disconnect(networkID: String) async {
+        sendPump?.cancel()
+        sendQueue.removeAll()
         connection?.cancel()
         connection = nil
         emit(.stateChanged(networkID: networkID, .disconnected))

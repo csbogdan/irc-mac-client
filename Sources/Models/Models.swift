@@ -136,6 +136,26 @@ struct Conversation: Identifiable, Hashable {
     // makes SwiftUI skip row updates when unread/mentions change.
 }
 
+// MARK: - Join failure (471/473/474/475)
+
+struct JoinFailure: Identifiable {
+    let id = UUID()
+    var networkID: String
+    var channel: String
+    var code: Int
+    var reason: String
+
+    var title: String {
+        switch code {
+        case 471: return "\(channel) is full"
+        case 473: return "\(channel) is invite-only"
+        case 474: return "You're banned from \(channel)"
+        case 475: return "\(channel) needs a key"
+        default:  return "Can't join \(channel)"
+        }
+    }
+}
+
 // MARK: - Channel list (/list results)
 
 struct ChannelListItem: Identifiable, Hashable, Sendable {

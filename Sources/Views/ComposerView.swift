@@ -6,6 +6,8 @@ struct ComposerView: View {
     @State private var draft = ""
     @State private var slashIndex = 0
     @State private var completion: NickCompletion?
+    @State private var historyIndex: Int?
+    @State private var stashedDraft = ""
     @FocusState private var focused: Bool
 
     private struct NickCompletion { var base: String; var matches: [String]; var index: Int; var result: String }
@@ -18,6 +20,8 @@ struct ComposerView: View {
         .init(cmd: "nick", args: "<newnick>", desc: "Change your nickname"),
         .init(cmd: "topic", args: "<text>", desc: "Set the channel topic"),
         .init(cmd: "whois", args: "<nick>", desc: "Look up a user"),
+        .init(cmd: "ignore", args: "<nick>", desc: "Hide someone (client-side)"),
+        .init(cmd: "silence", args: "<nick|+mask>", desc: "Server-side ignore (Undernet)"),
         .init(cmd: "query", args: "<nick>", desc: "Open a private chat"),
         .init(cmd: "part", args: "", desc: "Leave the current channel"),
         .init(cmd: "quit", args: "<message>", desc: "Disconnect from the server"),
@@ -44,8 +48,8 @@ struct ComposerView: View {
                     .relayGlass(cornerRadius: Theme.composerCornerRadius)
                     .onKeyPress(.tab) { handleTab() }
                     .onKeyPress(.return) { handleReturn() }
-                    .onKeyPress(.upArrow) { slashOpen ? moveSlash(-1) : .ignored }
-                    .onKeyPress(.downArrow) { slashOpen ? moveSlash(1) : .ignored }
+                    .onKeyPress(.upArrow) { slashOpen ? moveSlash(-1) : recallHistory(-1) }
+                    .onKeyPress(.downArrow) { slashOpen ? moveSlash(1) : recallHistory(1) }
                     .onChange(of: draft) { _, new in
                         // Keep cycle state alive when the change came from Tab
                         // completion itself — reset only on real typing.
@@ -176,8 +180,32 @@ struct ComposerView: View {
         return base.trimmingCharacters(in: .whitespaces).isEmpty ? ": " : " "
     }
 
+    /// ↑/↓ walk previously sent lines (mIRC-style). The in-progress draft is
+    /// stashed on first ↑ and restored when you walk back past the newest line.
+    private func recallHistory(_ dir: Int) -> KeyPress.Result {
+        let h = model.inputHistory
+        guard !h.isEmpty else { return .ignored }
+        if dir < 0 {
+            if historyIndex == nil { stashedDraft = draft; historyIndex = h.count - 1 }
+            else if historyIndex! > 0 { historyIndex! -= 1 }
+            draft = h[historyIndex!]
+            return .handled
+        } else {
+            guard let i = historyIndex else { return .ignored }
+            if i < h.count - 1 {
+                historyIndex = i + 1
+                draft = h[historyIndex!]
+            } else {
+                historyIndex = nil
+                draft = stashedDraft
+            }
+            return .handled
+        }
+    }
+
     private func send() {
         model.submit(draft)
         draft = ""; completion = nil; slashIndex = 0
+        historyIndex = nil; stashedDraft = ""
     }
 }

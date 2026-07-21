@@ -76,6 +76,15 @@ private struct NetworkHeader: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { model.select(network.serverConsoleID) }
+        .contextMenu {
+            if network.state == .disconnected {
+                Button("Connect") { model.connect(network.id) }
+            } else {
+                Button("Disconnect") { model.disconnect(network.id) }
+            }
+            Divider()
+            Button("Private Session") { model.startPrivateSession(network.id) }
+        }
     }
 }
 
@@ -103,6 +112,11 @@ private struct ConversationRow: View {
                 .fontWeight(conv.unread > 0 ? .semibold : .regular)
                 .foregroundStyle(conv.isMuted ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
                 .lineLimit(1)
+
+            if conv.isMuted {
+                Image(systemName: "bell.slash.fill")
+                    .font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
 
             Spacer(minLength: 4)
 
@@ -132,7 +146,7 @@ private struct ConversationRow: View {
     @ViewBuilder private var contextMenu: some View {
         Button("Mark as Read") { model.markRead(conv.id) }
         if conv.kind == .channel {
-            Button(conv.isMuted ? "Unmute Channel" : "Mute Channel") { model.toggleMute(conv.id) }
+            Button(conv.isMuted ? "Unquiet Channel" : "Quiet Channel") { model.toggleMute(conv.id) }
             Button("Copy Channel Name") {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(conv.name, forType: .string)
             }
@@ -150,7 +164,7 @@ private struct ConversationRow: View {
             Divider()
             Button("Leave Channel", role: .destructive) { model.remove(conv.id) }
         } else if conv.kind == .directMessage {
-            Button(conv.isMuted ? "Unmute" : "Mute") { model.toggleMute(conv.id) }
+            Button(conv.isMuted ? "Unquiet" : "Quiet") { model.toggleMute(conv.id) }
             Divider()
             Button("Close Conversation", role: .destructive) { model.remove(conv.id) }
         }

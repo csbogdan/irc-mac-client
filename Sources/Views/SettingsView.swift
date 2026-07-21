@@ -10,7 +10,6 @@ struct SettingsView: View {
             ArtSettings().tabItem { Label("ASCII Art", systemImage: "paintbrush.pointed") }
             AppearanceSettings(appearance: $appearance).tabItem { Label("Appearance", systemImage: "paintpalette") }
             NotificationsSettings().tabItem { Label("Notifications", systemImage: "bell") }
-            AdvancedSettings().tabItem { Label("Advanced", systemImage: "gearshape.2") }
         }
         .frame(width: 720, height: 540)
     }
@@ -398,16 +397,5 @@ private struct NotificationsSettings: View {
         model.highlightKeywords.append(w)
         model.saveKeywords()
         newKeyword = ""
-    }
-}
-
-private struct AdvancedSettings: View {
-    var body: some View {
-        Form {
-            LabeledContent("Transport", value: "Mock service (offline demo)")
-            Text("Swap to the live NWConnection client in AppModel.client. Per-server connection details, SASL, on-connect commands and auto-join are configured in the Connections tab.")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-        .formStyle(.grouped).padding()
     }
 }

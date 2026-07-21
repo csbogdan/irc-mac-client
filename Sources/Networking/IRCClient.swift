@@ -29,6 +29,8 @@ enum IRCEvent {
     /// A single ban added/removed live (MODE +b / -b).
     case ban(conversationID: String, mask: String, added: Bool)
     case nickChanged(networkID: String, from: String, to: String)
+    /// Join refused: 471 full, 473 invite-only, 474 banned, 475 needs key.
+    case joinFailed(networkID: String, channel: String, code: Int, reason: String)
 }
 
 // MARK: - The single protocol both clients implement

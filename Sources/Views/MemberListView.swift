@@ -67,6 +67,9 @@ struct MemberListView: View {
         Button("Kick \(nick)…", role: .destructive) { model.kickPrompt(nick) }
         Button("Ban \(nick)…", role: .destructive) { model.banPrompt(nick) }
         Divider()
+        Button(model.isIgnored(nick) ? "Unignore \(nick)" : "Ignore \(nick)") { model.toggleIgnore(nick) }
+        Button("Silence \(nick) (server-side)") { model.silence(nick) }
+        Divider()
         Menu("Channel Service (X)") {
             Button("Op via X") { model.xOp(nick) }
             Button("Deop via X") { model.xDeop(nick) }

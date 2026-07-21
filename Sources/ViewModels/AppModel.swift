@@ -38,7 +38,18 @@ final class AppModel {
     var channelListOpen = false
     var channelList: [ChannelListItem] = []
     var commandPrompt: CommandPrompt?
+    var joinFailure: JoinFailure?
     @ObservationIgnored private var whoisTargetConvID: String?
+
+    // Composer input history (↑/↓ recall), auto-reconnect and private-session
+    // bookkeeping, and the Notification Center bridge.
+    @ObservationIgnored var inputHistory: [String] = []
+    @ObservationIgnored private var reconnectAttempts: [String: Int] = [:]
+    @ObservationIgnored private var reconnectTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var intentionalDisconnect: Set<String> = []
+    @ObservationIgnored private var privateModeNetworks: Set<String> = []
+    @ObservationIgnored private var pendingPrivateChannel: [String: String] = [:]
+    @ObservationIgnored let notifier = NotificationManager()
 
     // Persisted server configurations — the durable records behind `networks`.
     var serverConfigs: [ServerConfig] = []
@@ -52,6 +63,10 @@ final class AppModel {
     var highlightKeywords: [String] = []
     private static let keywordsKey = "relay.highlightKeywords.v1"
 
+    // Client-side ignore list — messages from these nicks are dropped.
+    var ignoredNicks: [String] = []
+    private static let ignoredKey = "relay.ignoredNicks.v1"
+
     init() {
         loadServers()
         buildWorld()
@@ -60,6 +75,12 @@ final class AppModel {
            let decoded = try? JSONDecoder().decode([String].self, from: data) {
             highlightKeywords = decoded
         }
+        if let data = UserDefaults.standard.data(forKey: AppModel.ignoredKey),
+           let decoded = try? JSONDecoder().decode([String].self, from: data) {
+            ignoredNicks = decoded
+        }
+        notifier.onSelect = { [weak self] convID in self?.select(convID) }
+        notifier.start()
         Task { await consumeEvents() }
         startAutoConnect()
     }
@@ -128,7 +149,10 @@ final class AppModel {
             mutateNetwork(networkID) { $0.state = state }
             if state == .connected {
                 connectingLog = []
+                reconnectAttempts[networkID] = 0
                 if was != .connected { performOnConnect(networkID) }
+            } else if state == .disconnected, was != nil, was != .disconnected {
+                scheduleReconnectIfNeeded(networkID)
             }
 
         case let .serverLine(networkID, text):
@@ -138,6 +162,7 @@ final class AppModel {
             appendMessage(to: "\(networkID)/$server", Message(id: UUID().uuidString, kind: .server, text: text))
 
         case let .message(convID, message):
+            guard message.nick.isEmpty || !isIgnored(message.nick) else { return }
             ensureConversation(convID)
             appendMessage(to: convID, message, incoming: message.nick != selfNick)
 
@@ -221,6 +246,13 @@ final class AppModel {
                 }
                 appendMessage(to: cid, Message(id: UUID().uuidString, kind: .server, text: "\(from) is now known as \(to)"))
             }
+
+        case let .joinFailed(networkID, channel, code, reason):
+            let cid = "\(networkID)/\(channel)"
+            ensureConversation(cid)
+            appendMessage(to: cid, Message(id: UUID().uuidString, kind: .server,
+                                           text: "*** Cannot join \(channel): \(reason)"))
+            joinFailure = JoinFailure(networkID: networkID, channel: channel, code: code, reason: reason)
         }
     }
 
@@ -257,15 +289,26 @@ final class AppModel {
         c.messages.append(message)
         // Cap scrollback so a flooded channel can't grow unboundedly laggy.
         if c.messages.count > 2000 { c.messages.removeFirst(c.messages.count - 1500) }
-        if incoming && convID != selectedID && countsAsActivity(message, in: c) {
+        let isChat = message.kind == .message || message.kind == .action
+        // Red badge (mentions) only for nick/keyword hits in a channel.
+        // DMs never set mentions → they show only the blue (general) badge.
+        let mention = isChat && isHighlight(message.text)
+        // Quiet conversations accrue no counters and post no notifications.
+        if incoming && convID != selectedID && !c.isMuted && countsAsActivity(message, in: c) {
             c.unread += 1
             if c.firstUnreadID == nil { c.firstUnreadID = message.id }
-            // Red badge (mentions) only for nick/keyword hits in a channel.
-            // DMs never set mentions → they show only the blue (general) badge.
-            let mention = (message.kind == .message || message.kind == .action) && isHighlight(message.text)
             if mention && c.kind == .channel { c.mentions += 1 }
         }
         conversations[convID] = c
+        // Notification Center: mentions + DMs. The delegate suppresses the
+        // banner while the app is frontmost, so these only surface when the
+        // app is in the background.
+        if incoming, isChat, !c.isMuted,
+           c.kind == .directMessage || (c.kind == .channel && mention) {
+            notifier.post(convID: convID,
+                          title: c.kind == .channel ? "\(c.name) — \(message.nick)" : message.nick,
+                          body: RichText.plain(message.text))
+        }
     }
 
     /// In a channel, all activity (chat, joins/parts/quits/kicks, ban/mode
@@ -298,15 +341,58 @@ final class AppModel {
     // MARK: Connection
 
     func connect(_ networkID: String) {
+        intentionalDisconnect.remove(networkID)
+        privateModeNetworks.remove(networkID)   // a manual Connect is a normal session
+        cancelReconnect(networkID)
         Task { await hub.updateConfigs(serverConfigs); await hub.connect(networkID: networkID) }
     }
-    func disconnect(_ networkID: String) { Task { await hub.disconnect(networkID: networkID) } }
+    func disconnect(_ networkID: String) {
+        intentionalDisconnect.insert(networkID)
+        privateModeNetworks.remove(networkID)
+        cancelReconnect(networkID)
+        reconnectAttempts[networkID] = 0
+        Task { await hub.disconnect(networkID: networkID) }
+    }
+
+    // MARK: - Auto-reconnect (exponential backoff)
+
+    private func cancelReconnect(_ networkID: String) {
+        reconnectTasks[networkID]?.cancel()
+        reconnectTasks[networkID] = nil
+    }
+
+    /// A socket dropped without the user asking: reconnect with exponential
+    /// backoff (2s → 5min). On success the normal performOnConnect path runs —
+    /// user modes and perform commands first (with their delays), THEN channel
+    /// rejoin — identical to a manual connect.
+    private func scheduleReconnectIfNeeded(_ networkID: String) {
+        guard !intentionalDisconnect.contains(networkID) else { return }
+        let attempt = reconnectAttempts[networkID, default: 0] + 1
+        reconnectAttempts[networkID] = attempt
+        let delay = min(300.0, pow(2.0, Double(attempt)))
+        appendMessage(to: "\(networkID)/$server",
+                      Message(id: UUID().uuidString, kind: .server,
+                              text: "*** Connection lost — reconnecting in \(Int(delay))s (attempt \(attempt))"))
+        cancelReconnect(networkID)
+        reconnectTasks[networkID] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self, self.state(of: networkID) == .disconnected else { return }
+            self.appendMessage(to: "\(networkID)/$server",
+                               Message(id: UUID().uuidString, kind: .server, text: "*** Reconnecting…"))
+            await self.hub.updateConfigs(self.serverConfigs)
+            await self.hub.connect(networkID: networkID)
+        }
+    }
 
     // MARK: Composer entry point — parse slash commands, else send
 
     func submit(_ raw: String) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        if inputHistory.last != text {
+            inputHistory.append(text)
+            if inputHistory.count > 100 { inputHistory.removeFirst() }
+        }
         if text.hasPrefix("/") { runCommand(text) }
         else {
             Task { await client.send(text: text, to: selectedID) }
@@ -358,6 +444,25 @@ final class AppModel {
                 Task { await client.sendRaw("PRIVMSG \(target) :\u{01}\(payload)\u{01}", networkID: netID) }
                 appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: "*** CTCP \(payload) → \(target)"))
             }
+        case "silence":
+            // Undernet server-side ignore: /silence [nick | +mask | -mask]
+            guard !netID.isEmpty else { break }
+            if let m = rest.first, !m.isEmpty {
+                let mask = (m.hasPrefix("+") || m.hasPrefix("-")) ? m : "+" + (m.contains("!") ? m : "\(m)!*@*")
+                Task { await client.sendRaw("SILENCE \(mask)", networkID: netID) }
+                appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: "*** SILENCE \(mask)"))
+            } else {
+                Task { await client.sendRaw("SILENCE", networkID: netID) }   // list current masks
+            }
+        case "ignore":
+            if let n = rest.first, !n.isEmpty {
+                if !isIgnored(n) { toggleIgnore(n) }
+            } else {
+                let list = ignoredNicks.isEmpty ? "(nobody)" : ignoredNicks.joined(separator: ", ")
+                appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: "*** Ignoring: \(list)"))
+            }
+        case "unignore":
+            if let n = rest.first, isIgnored(n) { toggleIgnore(n) }
         case "msg", "query":
             if let n = rest.first { openDM(n, message: rest.dropFirst().joined(separator: " ")) }
         case "quit":
@@ -422,7 +527,42 @@ final class AppModel {
     func setMode(_ mode: MemberMode, nick: String) { Task { await client.setMode(mode, nick: nick, conversationID: selectedID) } }
     func kick(_ nick: String) { Task { await client.kick(nick: nick, conversationID: selectedID) } }
     func markRead(_ id: String) { mutateConversation(id) { $0.unread = 0; $0.mentions = 0; $0.firstUnreadID = nil } }
-    func toggleMute(_ id: String) { mutateConversation(id) { $0.isMuted.toggle() } }
+
+    /// Quiet: no counters, no notifications from this conversation.
+    func toggleMute(_ id: String) {
+        mutateConversation(id) {
+            $0.isMuted.toggle()
+            if $0.isMuted { $0.unread = 0; $0.mentions = 0; $0.firstUnreadID = nil }
+        }
+    }
+
+    // MARK: - Ignore (client-side) & SILENCE (server-side)
+
+    func isIgnored(_ nick: String) -> Bool {
+        ignoredNicks.contains { $0.caseInsensitiveCompare(nick) == .orderedSame }
+    }
+
+    func toggleIgnore(_ nick: String) {
+        if isIgnored(nick) {
+            ignoredNicks.removeAll { $0.caseInsensitiveCompare(nick) == .orderedSame }
+        } else {
+            ignoredNicks.append(nick)
+        }
+        if let data = try? JSONEncoder().encode(ignoredNicks) {
+            UserDefaults.standard.set(data, forKey: AppModel.ignoredKey)
+        }
+        appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server,
+            text: isIgnored(nick) ? "*** Now ignoring \(nick) (client-side — /unignore \(nick) to undo)"
+                                  : "*** Stopped ignoring \(nick)"))
+    }
+
+    /// Server-side ignore on the current network (Undernet SILENCE).
+    func silence(_ nick: String) {
+        guard let netID = selectedNetwork?.id else { return }
+        let mask = "+\(nick)!*@*"
+        Task { await client.sendRaw("SILENCE \(mask)", networkID: netID) }
+        appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server, text: "*** SILENCE \(mask)"))
+    }
 
     // MARK: Nick completion (for the composer)
 
@@ -790,6 +930,12 @@ final class AppModel {
     /// Run the network's perform list (honouring per-command delays), then —
     /// after `joinDelay` — join its auto-join channels.
     private func performOnConnect(_ networkID: String) {
+        // Private session: no user modes, no perform, no auto-join — just the
+        // secret room.
+        if privateModeNetworks.contains(networkID) {
+            if let chan = pendingPrivateChannel[networkID] { joinPrivateChannel(chan, networkID: networkID) }
+            return
+        }
         guard let cfg = config(for: networkID) else { return }
         let nick = networks.first { $0.id == networkID }?.nick ?? cfg.nick
 
@@ -807,9 +953,103 @@ final class AppModel {
                 await self?.client.sendRaw(raw, networkID: networkID)
             }
             if cfg.joinDelay > 0 { try? await Task.sleep(for: .seconds(cfg.joinDelay)) }
-            for channel in cfg.autoJoinChannels {
-                self?.joinOnConnect(channel, networkID: networkID)
+            // 3. Only after performs: the auto-join list, plus every channel
+            // still in the sidebar (an auto-reconnect puts you back where you
+            // were).
+            guard let self else { return }
+            let sidebar = self.networks.first { $0.id == networkID }?.conversationIDs
+                .compactMap { self.conversations[$0] }
+                .filter { $0.kind == .channel }
+                .map(\.name) ?? []
+            var seen = Set<String>()
+            for channel in cfg.autoJoinChannels + sidebar {
+                let norm = (channel.hasPrefix("#") || channel.hasPrefix("&") ? channel : "#\(channel)").lowercased()
+                guard seen.insert(norm).inserted else { continue }
+                self.joinOnConnect(channel, networkID: networkID)
             }
+        }
+    }
+
+    // MARK: - Private session
+
+    /// Incognito: (re)connect with a random nick, skip perform/auto-join, join
+    /// a random empty channel and set it +s (secret).
+    func startPrivateSession(_ networkID: String) {
+        let nick = AppModel.randomPrivateNick()
+        let chan = AppModel.randomPrivateChannel()
+        privateModeNetworks.insert(networkID)
+        pendingPrivateChannel[networkID] = chan
+        cancelReconnect(networkID)
+        mutateNetwork(networkID) { $0.nick = nick }
+        appendMessage(to: "\(networkID)/$server",
+                      Message(id: UUID().uuidString, kind: .server,
+                              text: "*** Private session: nick \(nick), channel \(chan) (+s) — perform & auto-join skipped"))
+        Task { [weak self] in
+            guard let self else { return }
+            if self.state(of: networkID) != .disconnected {
+                self.intentionalDisconnect.insert(networkID)   // suppress auto-reconnect for this drop
+                await self.hub.disconnect(networkID: networkID)
+                try? await Task.sleep(for: .seconds(0.5))
+            }
+            self.intentionalDisconnect.remove(networkID)
+            await self.client.changeNick(nick, networkID: networkID)
+            await self.hub.updateConfigs(self.serverConfigs)
+            await self.hub.connect(networkID: networkID)
+        }
+    }
+
+    private func joinPrivateChannel(_ chan: String, networkID: String) {
+        joinOnConnect(chan, networkID: networkID)
+        let id = "\(networkID)/\(chan)"
+        select(id)
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))   // wait for creator ops
+            self?.setChannelMode("s", enabled: true, for: id)
+        }
+    }
+
+    private static func randomPrivateNick() -> String {
+        let a = ["quiet", "gray", "swift", "north", "dusk", "pale", "calm", "low"].randomElement()!
+        let b = ["owl", "fox", "elk", "jay", "koi", "wren", "lynx", "hare"].randomElement()!
+        return a + b + String(Int.random(in: 10...99))
+    }
+
+    private static func randomPrivateChannel() -> String {
+        "#" + String((0..<8).map { _ in "abcdefghijklmnopqrstuvwxyz0123456789".randomElement()! })
+    }
+
+    // MARK: - Join-failure recovery (471/473/474/475)
+
+    func retryJoin(_ f: JoinFailure, key: String? = nil) {
+        joinFailure = nil
+        let raw = (key?.isEmpty == false) ? "JOIN \(f.channel) \(key!)" : "JOIN \(f.channel)"
+        Task { await client.sendRaw(raw, networkID: f.networkID) }
+        appendMessage(to: "\(f.networkID)/\(f.channel)",
+                      Message(id: UUID().uuidString, kind: .server, text: ">> \(raw)"))
+    }
+
+    /// Ask X to invite us (473 invite-only), then retry the join.
+    func askXInvite(_ f: JoinFailure) {
+        joinFailure = nil
+        appendMessage(to: "\(f.networkID)/\(f.channel)",
+                      Message(id: UUID().uuidString, kind: .server, text: "*** Asking X for an invite to \(f.channel)…"))
+        Task { [weak self] in
+            await self?.client.sendRaw("PRIVMSG \(AppModel.xBot) :INVITE \(f.channel)", networkID: f.networkID)
+            try? await Task.sleep(for: .seconds(2))
+            await self?.client.sendRaw("JOIN \(f.channel)", networkID: f.networkID)
+        }
+    }
+
+    /// Ask X to lift our ban (474), then retry the join.
+    func askXUnban(_ f: JoinFailure) {
+        let nick = networks.first { $0.id == f.networkID }?.nick ?? ""
+        joinFailure = nil
+        appendMessage(to: "\(f.networkID)/\(f.channel)",
+                      Message(id: UUID().uuidString, kind: .server, text: "*** Asking X to unban \(nick) in \(f.channel)…"))
+        Task { [weak self] in
+            await self?.client.sendRaw("PRIVMSG \(AppModel.xBot) :UNBAN \(f.channel) \(nick)!*@*", networkID: f.networkID)
+            try? await Task.sleep(for: .seconds(2))
+            await self?.client.sendRaw("JOIN \(f.channel)", networkID: f.networkID)
         }
     }
 

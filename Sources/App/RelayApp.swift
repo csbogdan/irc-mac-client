@@ -26,6 +26,11 @@ struct RelayApp: App {
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
+
+        Window("Relay Help", id: "help") {
+            HelpView()
+        }
+        .defaultPosition(.center)
     }
 
     private var colorScheme: ColorScheme? {
@@ -51,6 +56,14 @@ struct RelayCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Connection…") { model.quickSwitcherOpen = true }
                 .keyboardShortcut("n", modifiers: .command)
+            Button("New Private Session") {
+                if let id = model.selectedNetwork?.id { model.startPrivateSession(id) }
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+        }
+        CommandGroup(replacing: .help) {
+            Button("Relay Help") { openWindow(id: "help") }
+                .keyboardShortcut("?", modifiers: .command)
         }
         CommandMenu("Navigate") {
             Button("Quick Switcher…") { model.quickSwitcherOpen.toggle() }
