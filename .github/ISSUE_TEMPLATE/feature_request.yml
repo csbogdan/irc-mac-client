@@ -1,0 +1,23 @@
+name: Feature request
+description: Something Relay should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The itch
+      description: What are you trying to do that's currently annoying or impossible?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: How it should work
+      description: Describe the behavior you want. Mockups/screenshots welcome.
+    validations:
+      required: true
+  - type: input
+    id: precedent
+    attributes:
+      label: Prior art
+      description: Does mIRC / another IRC client do this? How?

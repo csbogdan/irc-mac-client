@@ -107,6 +107,12 @@ One seam: everything talks to the `IRCClient` protocol emitting an `IRCEvent` st
 
 </details>
 
+## Issues & contributions
+
+Found a bug? [Open an issue](https://github.com/csbogdan/irc-mac-client/issues/new/choose) — the template asks for your Relay version (About window), macOS version, and a screenshot. The server console (click the network's name in the sidebar) usually holds the interesting lines.
+
+Ideas and PRs are welcome — read [CONTRIBUTING.md](CONTRIBUTING.md) first. Small, focused PRs with screenshots have the best odds. By contributing you agree your changes ship under the project [license](LICENSE).
+
 ## Versioning
 
 [Semantic versioning](https://semver.org): breaking/major features bump minor, fixes bump patch. Every release ships a signed-ish zip of the app.

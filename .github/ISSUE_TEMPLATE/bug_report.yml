@@ -1,0 +1,45 @@
+name: Bug report
+description: Something's broken
+labels: [bug]
+body:
+  - type: input
+    id: relay-version
+    attributes:
+      label: Relay version
+      description: Menu → About Relay
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: "26.x Tahoe / 15.x Sequoia / 14.x Sonoma"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Connect to Undernet
+        2. Join #…
+        3. …
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Screenshots or it didn't happen. Drag images here.
+  - type: textarea
+    id: console
+    attributes:
+      label: Server console output
+      description: Click the network's name in the sidebar — the interesting lines are usually there. Paste them.
+      render: text
