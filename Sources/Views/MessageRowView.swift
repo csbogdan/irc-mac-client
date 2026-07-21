@@ -78,10 +78,6 @@ struct MessageRowView: View {
                 }
                 Text(RichText.render(m.text, selfNick: model.selfNick, dark: scheme == .dark))
                     .font(.system(size: 14)).textSelection(.enabled)
-                    .onHover { hovering in linkHover(hovering, text: m.text) }
-                    .popover(isPresented: $showLinkPreview, arrowEdge: .bottom) {
-                        if let url = previewURL { LinkHoverPreview(url: url) }
-                    }
                 if let p = m.preview { PreviewCard(preview: p) }
             }
             Spacer(minLength: 0)
@@ -105,6 +101,13 @@ struct MessageRowView: View {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(m.text, forType: .string)
             }
+        }
+        // Hover preview lives on the ROW, not the Text — .textSelection bridges
+        // the Text to an AppKit text view that eats hover events, so onHover
+        // on the Text itself never fires.
+        .onHover { hovering in linkHover(hovering, text: m.text) }
+        .popover(isPresented: $showLinkPreview, arrowEdge: .bottom) {
+            if let url = previewURL { LinkHoverPreview(url: url) }
         }
     }
 
