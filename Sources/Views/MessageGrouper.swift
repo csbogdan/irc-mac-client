@@ -27,11 +27,19 @@ enum MessageRow: Identifiable {
 enum MessageGrouper {
 
     static func rows(for conv: Conversation, selfNick: String, keywords: [String] = [], searchQuery: String?) -> [MessageRow] {
+        // ONE compiled regex for the whole pass. range(of:.regularExpression)
+        // recompiled the pattern per message per word — at the 2000-message
+        // scrollback cap that meant thousands of regex compiles on the main
+        // thread for every incoming message.
         let highlightWords = ([selfNick] + keywords).filter { !$0.isEmpty }
+        let highlightRegex: NSRegularExpression? = highlightWords.isEmpty ? nil :
+            try? NSRegularExpression(
+                pattern: "\\b(?:" + highlightWords.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|") + ")\\b",
+                options: [.caseInsensitive])
         func isHighlight(_ text: String) -> Bool {
-            for w in highlightWords where text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: w))\\b",
-                                                     options: [.regularExpression, .caseInsensitive]) != nil { return true }
-            return false
+            guard let highlightRegex else { return false }
+            return highlightRegex.firstMatch(in: text,
+                                             range: NSRange(location: 0, length: (text as NSString).length)) != nil
         }
         var rows: [MessageRow] = []
         var eventBuffer: [Message] = []

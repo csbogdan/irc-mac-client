@@ -167,6 +167,7 @@ final class LinkMetadataCache {
     func metadata(for url: URL) async throws -> LPLinkMetadata {
         if let hit = cache[url] { return hit }
         let md = try await LPMetadataProvider().startFetchingMetadata(for: url)
+        if cache.count > 100 { cache.removeAll() }   // LPLinkMetadata pins WebKit memory
         cache[url] = md
         return md
     }

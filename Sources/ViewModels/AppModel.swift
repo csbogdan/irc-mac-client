@@ -93,14 +93,25 @@ final class AppModel {
         }
     }
 
+    // Compiled once and reused until nick/keywords change — this runs for
+    // every incoming message network-wide, and per-call regex compilation was
+    // a measurable, growing main-thread cost.
+    @ObservationIgnored private var highlightRegexKey = ""
+    @ObservationIgnored private var highlightRegexCached: NSRegularExpression?
+
     /// Does this text mention you (your nick) or any highlight keyword?
     func isHighlight(_ text: String) -> Bool {
-        let words = [selfNick] + highlightKeywords
-        for w in words where !w.isEmpty {
-            if text.range(of: "\\b\(NSRegularExpression.escapedPattern(for: w))\\b",
-                          options: [.regularExpression, .caseInsensitive]) != nil { return true }
+        let words = ([selfNick] + highlightKeywords).filter { !$0.isEmpty }
+        let key = words.joined(separator: "\u{1}").lowercased()
+        if key != highlightRegexKey {
+            highlightRegexKey = key
+            highlightRegexCached = words.isEmpty ? nil :
+                try? NSRegularExpression(
+                    pattern: "\\b(?:" + words.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|") + ")\\b",
+                    options: [.caseInsensitive])
         }
-        return false
+        guard let regex = highlightRegexCached else { return false }
+        return regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)) != nil
     }
 
     /// Build the runtime networks/conversations from `serverConfigs`. Every

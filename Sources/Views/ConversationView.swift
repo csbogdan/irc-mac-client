@@ -127,7 +127,8 @@ struct ConversationView: View {
                 // messages.count fired before the cached rows updated, which
                 // left follow perpetually one message behind.
                 guard atBottom else { return }
-                Task { @MainActor in withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } }
+                // No animation — animated scrolls pile up during floods.
+                Task { @MainActor in proxy.scrollTo("BOTTOM", anchor: .bottom) }
             }
             .onChange(of: model.selectedID) { _, _ in
                 // Switching always lands at the latest messages. Always.
