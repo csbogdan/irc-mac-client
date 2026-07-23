@@ -8,17 +8,6 @@ struct ConversationView: View {
     @State private var editingTopic = false
     @State private var topicDraft = ""
     @State private var rows: [MessageRow] = []
-    @State private var memory = ScrollMemory()
-
-    /// Per-conversation scroll memory — follow flag, anchor row, and the set of
-    /// currently visible rows. A plain class so mutations from row
-    /// onAppear/onDisappear never invalidate the view tree.
-    private final class ScrollMemory {
-        var follow: [String: Bool] = [:]
-        var anchor: [String: String] = [:]
-        var visible: Set<String> = []
-        var renderedConvID: String?
-    }
 
     private var conv: Conversation? { model.selectedConversation }
     private var net: Network? { model.selectedNetwork }
@@ -39,17 +28,7 @@ struct ConversationView: View {
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
-        .onChange(of: rowsKey, initial: true) { _, _ in
-            // Save the leaving conversation's scroll state BEFORE swapping the
-            // rows — `rows` still belongs to the previous conversation here.
-            if let prev = memory.renderedConvID, prev != model.selectedID {
-                memory.follow[prev] = atBottom
-                memory.anchor[prev] = rows.first { memory.visible.contains($0.id) }?.id
-                memory.visible.removeAll()
-            }
-            memory.renderedConvID = model.selectedID
-            rows = computeRows()
-        }
+        .onChange(of: rowsKey, initial: true) { _, _ in rows = computeRows() }
     }
 
     // MARK: Topic bar
@@ -111,8 +90,6 @@ struct ConversationView: View {
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
-                        .onAppear { memory.visible.insert(row.id) }
-                        .onDisappear { memory.visible.remove(row.id) }
                 }
                 // Visibility of this anchor tells us whether the user is parked
                 // at the bottom — follow only happens then.
@@ -131,7 +108,7 @@ struct ConversationView: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
-                    Button { atBottom = true; withAnimation { proxy.scrollTo("BOTTOM") } } label: {
+                    Button { atBottom = true; jumpToBottom(proxy) } label: {
                         Label("Jump to latest", systemImage: "arrow.down")
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 12).padding(.vertical, 7)
@@ -142,33 +119,33 @@ struct ConversationView: View {
                 }
             }
             .onAppear {
-                atBottom = memory.follow[model.selectedID] ?? true
-                restoreScroll(proxy, for: model.selectedID)
+                atBottom = true
+                jumpToBottom(proxy)
             }
             .onChange(of: rows.last?.id) { _, _ in
                 // Follow AFTER the new row has rendered — keying off
                 // messages.count fired before the cached rows updated, which
                 // left follow perpetually one message behind.
                 guard atBottom else { return }
-                Task { @MainActor in withAnimation { proxy.scrollTo("BOTTOM") } }
+                Task { @MainActor in withAnimation { proxy.scrollTo("BOTTOM", anchor: .bottom) } }
             }
-            .onChange(of: model.selectedID) { _, new in
-                // Restore the entered conversation's follow mode / position
-                // (its state was saved in the rowsKey handler).
-                atBottom = memory.follow[new] ?? true
-                restoreScroll(proxy, for: new)
+            .onChange(of: model.selectedID) { _, _ in
+                // Switching always lands at the latest messages. Always.
+                atBottom = true
+                jumpToBottom(proxy)
             }
         }
     }
 
-    /// Deferred one tick so the new conversation's rows exist before scrolling.
-    private func restoreScroll(_ proxy: ScrollViewProxy, for convID: String) {
+    /// One immediate pass plus two settling passes — List resolves row heights
+    /// lazily, so a single scrollTo routinely under-shoots on long scrollback.
+    private func jumpToBottom(_ proxy: ScrollViewProxy) {
+        proxy.scrollTo("BOTTOM", anchor: .bottom)
         Task { @MainActor in
-            if memory.follow[convID] ?? true {
-                proxy.scrollTo("BOTTOM")
-            } else if let anchor = memory.anchor[convID] {
-                proxy.scrollTo(anchor, anchor: .top)
-            }
+            try? await Task.sleep(for: .milliseconds(60))
+            proxy.scrollTo("BOTTOM", anchor: .bottom)
+            try? await Task.sleep(for: .milliseconds(180))
+            proxy.scrollTo("BOTTOM", anchor: .bottom)
         }
     }
 

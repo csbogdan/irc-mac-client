@@ -221,7 +221,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             H("Finding things")
             Bullet("⌘F searches inside the current channel. Matching lines only; press the ✕ to go back.")
             Bullet("At the bottom, the view follows new messages by itself. Scroll up and it stops; scroll back down (or hit Jump to latest) and it follows again.")
-            Bullet("Each conversation remembers its own place — switch away and back, and you're where you left it.")
+            Bullet("Switching conversations always lands you at the latest messages.")
             Bullet("A \"NEW MESSAGES\" line marks where you left off.")
         }
 
