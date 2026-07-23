@@ -4,7 +4,10 @@ import Foundation
 /// the message list — grouping consecutive messages by author, coalescing
 /// join/part/quit into one collapsible event group, and inserting the unread
 /// divider. Kept out of the view so it stays unit-testable.
-enum MessageRow: Identifiable {
+// Equatable is load-bearing: without it SwiftUI can't prove rows unchanged,
+// so every incoming message re-rendered and re-measured EVERY row in the
+// scrollback — O(rows) layout per message, sluggish by a few hundred lines.
+enum MessageRow: Identifiable, Equatable {
     case divider(id: String)
     case events(id: String, summary: String, lines: [String], group: [Message])
     case message(Message, showHeader: Bool, isMention: Bool)

@@ -6,11 +6,15 @@ let linkPreviewLog = Logger(subsystem: "org.relay.irc", category: "linkpreview")
 /// Renders one display row. Modern grouped layout: avatar gutter + name/time
 /// header + body, with distinct treatments for actions, notices, server lines
 /// and coalesced join/part event groups.
-struct MessageRowView: View {
+struct MessageRowView: View, Equatable {
     @Environment(\.colorScheme) private var scheme
     @Environment(AppModel.self) private var model
     @AppStorage("showTimestamps") private var showTimestamps = true
     let row: MessageRow
+
+    // Used via .equatable() in the scrollback: rows with identical content are
+    // skipped entirely instead of re-measured on every incoming message.
+    static func == (lhs: MessageRowView, rhs: MessageRowView) -> Bool { lhs.row == rhs.row }
 
     private let gutter: CGFloat = 45  // avatar column (34) + spacing
 
@@ -193,7 +197,7 @@ final class LinkMetadataCache {
         if let hit = images[url] { return hit }
         guard let (data, _) = try? await URLSession.shared.data(from: url),
               data.count < 8_000_000, let img = NSImage(data: data) else { return nil }
-        if images.count > 60 { images.removeAll(keepingCapacity: true) }
+        if images.count > 12 { images.removeAll(keepingCapacity: true) }   // decoded bitmaps are MBs each
         images[url] = img
         return img
     }

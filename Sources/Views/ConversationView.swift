@@ -86,6 +86,7 @@ struct ConversationView: View {
             List {
                 ForEach(rows) { row in
                     MessageRowView(row: row)
+                        .equatable()
                         .id(row.id)
                         .listRowInsets(EdgeInsets())
                         .listRowSeparator(.hidden)

@@ -96,7 +96,7 @@ enum RichText {
             attr[r].foregroundColor = .white
             attr[r].font = .system(size: 14, weight: .semibold)
         }
-        if cache.count > 4000 { cache.removeAll(keepingCapacity: true) }
+        if cache.count > 1200 { cache.removeAll(keepingCapacity: true) }   // AttributedStrings aren't small
         cache[key] = attr
         return attr
     }
