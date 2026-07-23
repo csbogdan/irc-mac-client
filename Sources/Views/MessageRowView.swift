@@ -1,5 +1,4 @@
 import SwiftUI
-import LinkPresentation
 import os
 
 let linkPreviewLog = Logger(subsystem: "org.relay.irc", category: "linkpreview")
@@ -156,29 +155,69 @@ struct MessageRowView: View {
     }
 }
 
-// MARK: - Hover link preview (LinkPresentation)
+// MARK: - Hover link preview (plain URLSession + Open Graph — NO WebKit)
 
-/// Fetches and caches LPLinkMetadata so re-hovering a link is instant.
+/// Fetches page title / og:image with a plain HTTP GET and a few regexes.
+/// Deliberately NOT LinkPresentation: LPMetadataProvider loads pages in an
+/// in-process WebKit that executes their JavaScript — sampled burning 3–4
+/// cores and hundreds of MB after a few hours of hovered links.
 @MainActor
 final class LinkMetadataCache {
+    struct Meta { var title: String?; var imageURL: URL? }
     static let shared = LinkMetadataCache()
-    private var cache: [URL: LPLinkMetadata] = [:]
+    private var cache: [URL: Meta] = [:]
+    private var images: [URL: NSImage] = [:]
 
-    func metadata(for url: URL) async throws -> LPLinkMetadata {
+    func metadata(for url: URL) async throws -> Meta {
         if let hit = cache[url] { return hit }
-        let md = try await LPMetadataProvider().startFetchingMetadata(for: url)
-        if cache.count > 100 { cache.removeAll() }   // LPLinkMetadata pins WebKit memory
-        cache[url] = md
-        return md
-    }
-
-    static func image(from md: LPLinkMetadata) async -> NSImage? {
-        guard let provider = md.imageProvider else { return nil }
-        return await withCheckedContinuation { cont in
-            provider.loadObject(ofClass: NSImage.self) { obj, _ in
-                cont.resume(returning: obj as? NSImage)
+        var req = URLRequest(url: url, timeoutInterval: 8)
+        req.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X) Relay", forHTTPHeaderField: "User-Agent")
+        let (data, resp) = try await URLSession.shared.data(for: req)
+        var meta = Meta()
+        let contentType = (resp as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Type") ?? ""
+        if contentType.hasPrefix("image/") {
+            meta.imageURL = url                       // bare image link — preview the image itself
+        } else {
+            let html = String(decoding: data.prefix(300_000), as: UTF8.self)
+            meta.title = Self.metaContent(html, "og:title") ?? Self.tagText(html, "title")
+            if let img = Self.metaContent(html, "og:image"), let u = URL(string: img, relativeTo: url) {
+                meta.imageURL = u.absoluteURL
             }
         }
+        if cache.count > 300 { cache.removeAll(keepingCapacity: true) }
+        cache[url] = meta
+        return meta
+    }
+
+    func image(for url: URL) async -> NSImage? {
+        if let hit = images[url] { return hit }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              data.count < 8_000_000, let img = NSImage(data: data) else { return nil }
+        if images.count > 60 { images.removeAll(keepingCapacity: true) }
+        images[url] = img
+        return img
+    }
+
+    /// `<meta property="og:…" content="…">` — either attribute order.
+    private static func metaContent(_ html: String, _ property: String) -> String? {
+        let p = NSRegularExpression.escapedPattern(for: property)
+        return firstGroup(html, "<meta[^>]*(?:property|name)=[\"']\(p)[\"'][^>]*content=[\"']([^\"']*)[\"']")
+            ?? firstGroup(html, "<meta[^>]*content=[\"']([^\"']*)[\"'][^>]*(?:property|name)=[\"']\(p)[\"']")
+    }
+    private static func tagText(_ html: String, _ tag: String) -> String? {
+        firstGroup(html, "<\(tag)[^>]*>([^<]+)</\(tag)>")
+    }
+    private static func firstGroup(_ s: String, _ pattern: String) -> String? {
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]),
+              let m = re.firstMatch(in: s, range: NSRange(location: 0, length: (s as NSString).length)),
+              m.numberOfRanges > 1, let r = Range(m.range(at: 1), in: s) else { return nil }
+        return String(s[r])
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -221,7 +260,7 @@ private struct LinkHoverPreview: View {
                 let md = try await LinkMetadataCache.shared.metadata(for: url)
                 linkPreviewLog.info("metadata ok: \(md.title ?? "(no title)", privacy: .public)")
                 title = md.title
-                image = await LinkMetadataCache.image(from: md)
+                if let imageURL = md.imageURL { image = await LinkMetadataCache.shared.image(for: imageURL) }
             } catch {
                 linkPreviewLog.error("metadata failed \(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 failed = true
