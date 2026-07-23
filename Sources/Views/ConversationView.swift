@@ -8,6 +8,14 @@ struct ConversationView: View {
     @State private var editingTopic = false
     @State private var topicDraft = ""
     @State private var rows: [MessageRow] = []
+    @State private var rowsCache = RowsCache()
+
+    /// Grouped rows kept per conversation, so returning to a channel whose
+    /// buffer hasn't changed reuses them without regrouping. A plain class —
+    /// mutations must not invalidate the view tree.
+    private final class RowsCache {
+        var store: [String: (key: String, rows: [MessageRow])] = [:]
+    }
 
     private var conv: Conversation? { model.selectedConversation }
     private var net: Network? { model.selectedNetwork }
@@ -28,7 +36,16 @@ struct ConversationView: View {
             }
         }
         .background(Color(nsColor: .textBackgroundColor))
-        .onChange(of: rowsKey, initial: true) { _, _ in rows = computeRows() }
+        .onChange(of: rowsKey, initial: true) { _, _ in
+            let id = model.selectedID
+            if let cached = rowsCache.store[id], cached.key == rowsKey {
+                rows = cached.rows                    // unchanged buffer — no regroup
+            } else {
+                rows = computeRows()
+                if rowsCache.store.count > 8 { rowsCache.store.removeAll() }
+                rowsCache.store[id] = (rowsKey, rows)
+            }
+        }
     }
 
     // MARK: Topic bar
@@ -101,6 +118,10 @@ struct ConversationView: View {
                     .onAppear { atBottom = true }
                     .onDisappear { atBottom = false }
             }
+            // Per-conversation identity: switching mounts a FRESH table that
+            // lazily builds only visible rows, instead of diffing two large
+            // disjoint row sets inside one shared List (O(old+new) "replay").
+            .id(model.selectedID)
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .contentShape(Rectangle())
