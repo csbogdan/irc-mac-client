@@ -322,6 +322,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             H("Everyday")
             Cmd("/join ⟨#room⟩", "enter a channel")
             Cmd("/part", "leave the current channel")
+            Cmd("/quit ⟨message⟩", "leave the server. The message is optional (\"Leaving\" if you skip it). Disconnect in the sidebar does the same: Relay tells the server, then stays offline.")
             Cmd("/msg ⟨name⟩ ⟨text⟩", "private message (also: /query)")
             Cmd("/me ⟨does something⟩", "action line")
             Cmd("/nick ⟨newname⟩", "change your nickname")

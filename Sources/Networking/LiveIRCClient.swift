@@ -123,6 +123,7 @@ actor LiveIRCClient: IRCClient {
 
     func connect(networkID: String) async {
         // Reset per-session state — this instance is reused across reconnects.
+        closing = false
         registered = false
         nickAttempt = 0
         // Start every session from the nick we're meant to use: an explicit
@@ -757,8 +758,13 @@ actor LiveIRCClient: IRCClient {
     private var sendQueue: [String] = []
     private var sendPump: Task<Void, Never>?
     private var sendTimer: Date = .distantPast
+    /// While a QUIT is being written, nothing else may join the queue.
+    /// disconnect() used to cancel the pump and drop the queue, which threw
+    /// away the QUIT along with everything else.
+    private var closing = false
 
     private func rawSend(_ s: String) {
+        guard !closing else { return }
         sendQueue.append(s)
         if sendPump == nil {
             sendPump = Task { [weak self] in await self?.drainSendQueue() }
@@ -783,12 +789,39 @@ actor LiveIRCClient: IRCClient {
         sendPump = nil
     }
 
-    func disconnect(networkID: String) async {
-        sendPump?.cancel()
+    func disconnect(networkID: String, quitMessage: String) async {
+        guard !closing else { return }
+        closing = true
+        let conn = connection
+        let pump = sendPump
+        sendPump = nil
+        pump?.cancel()
         sendQueue.removeAll()
-        connection?.cancel()
-        connection = nil
+        // Let the pump notice the cancel before we write. Otherwise its next
+        // send can land on the socket after QUIT, or instead of it.
+        await pump?.value
+        if let conn {
+            await writeLine(IRCParser.quitLine(message: quitMessage), on: conn)
+            conn.cancel()
+            if connection === conn { connection = nil }
+        }
+        closing = false
         emit(.stateChanged(networkID: networkID, .disconnected))
+    }
+
+    /// QUIT has to reach the kernel before cancel(). The completion is that
+    /// signal. The timeout covers a socket that will never call back.
+    private func writeLine(_ line: String, on conn: NWConnection) async {
+        let data = Data(line.utf8)
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            let gate = OnceResume()
+            conn.send(content: data, completion: .contentProcessed { _ in
+                gate.perform { cont.resume() }
+            })
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 2) {
+                gate.perform { cont.resume() }
+            }
+        }
     }
 
     func sendRaw(_ line: String, networkID: String) async {
@@ -859,4 +892,18 @@ actor LiveIRCClient: IRCClient {
 
     // MARK: Emit helper
     private func emit(_ event: IRCEvent) { continuation?.yield(event) }
+}
+
+/// First caller wins. QUIT's send completion and the timeout both try to
+/// resume the same continuation.
+private final class OnceResume: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func perform(_ body: () -> Void) {
+        lock.lock()
+        let first = !done
+        done = true
+        lock.unlock()
+        if first { body() }
+    }
 }

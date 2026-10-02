@@ -41,6 +41,13 @@ final class IRCParserTests: XCTestCase {
         XCTAssertEqual(line, "PRIVMSG #chan :hello there\r\n")
     }
 
+    func testQuitLineFlattensNewlinesAndDefaultsBlank() {
+        XCTAssertEqual(IRCParser.quitLine(message: ""), "QUIT Leaving\r\n")
+        XCTAssertEqual(IRCParser.quitLine(message: "   "), "QUIT Leaving\r\n")
+        XCTAssertEqual(IRCParser.quitLine(message: "gone home"), "QUIT :gone home\r\n")
+        XCTAssertEqual(IRCParser.quitLine(message: "bye\r\nNICK hacker"), "QUIT :bye NICK hacker\r\n")
+    }
+
     func testGrouperCoalescesJoins() {
         var conv = Conversation(id: "n/#c", kind: .channel, name: "#c")
         conv.messages = [

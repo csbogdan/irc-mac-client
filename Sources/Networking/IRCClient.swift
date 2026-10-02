@@ -50,7 +50,9 @@ protocol IRCClient: AnyObject {
     var events: AsyncStream<IRCEvent> { get }
 
     func connect(networkID: String) async
-    func disconnect(networkID: String) async
+    /// Leave politely. `quitMessage` is the QUIT reason written before the
+    /// socket closes. An empty message becomes "Leaving".
+    func disconnect(networkID: String, quitMessage: String) async
 
     /// Send a raw IRC protocol line on a network (used by on-connect perform
     /// commands). Implementations append CRLF as needed.

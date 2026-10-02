@@ -89,6 +89,18 @@ enum IRCParser {
 
     // MARK: Serialization (client → server)
 
+    /// `QUIT` with a one-line message. Newlines are flattened so a reason
+    /// can't smuggle a second protocol line. Blank means "Leaving".
+    static func quitLine(message: String) -> String {
+        let flat = message
+            .components(separatedBy: .newlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = flat.isEmpty ? "Leaving" : flat
+        return serialize(command: "QUIT", params: [text])
+    }
+
     static func serialize(command: String, params: [String], tags: [String: String] = [:]) -> String {
         var out = ""
         if !tags.isEmpty {

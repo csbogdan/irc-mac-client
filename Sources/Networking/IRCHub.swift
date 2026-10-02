@@ -51,7 +51,9 @@ actor IRCHub: IRCClient {
     // MARK: IRCClient routing
 
     func connect(networkID: String) async { await transport(for: networkID).connect(networkID: networkID) }
-    func disconnect(networkID: String) async { await transport(for: networkID).disconnect(networkID: networkID) }
+    func disconnect(networkID: String, quitMessage: String) async {
+        await transport(for: networkID).disconnect(networkID: networkID, quitMessage: quitMessage)
+    }
     func sendRaw(_ line: String, networkID: String) async { await transport(for: networkID).sendRaw(line, networkID: networkID) }
     func join(channel: String, key: String?, networkID: String) async { await transport(for: networkID).join(channel: channel, key: key, networkID: networkID) }
     func changeNick(_ nick: String, networkID: String) async { await transport(for: networkID).changeNick(nick, networkID: networkID) }

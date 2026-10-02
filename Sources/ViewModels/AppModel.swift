@@ -465,12 +465,12 @@ final class AppModel {
         cancelReconnect(networkID)
         Task { await hub.updateConfigs(serverConfigs); await hub.connect(networkID: networkID) }
     }
-    func disconnect(_ networkID: String) {
+    func disconnect(_ networkID: String, quitMessage: String = "Leaving") {
         intentionalDisconnect.insert(networkID)
         privateModeNetworks.remove(networkID)
         cancelReconnect(networkID)
         reconnectAttempts[networkID] = 0
-        Task { await hub.disconnect(networkID: networkID) }
+        Task { await hub.disconnect(networkID: networkID, quitMessage: quitMessage) }
     }
 
     // MARK: - Auto-reconnect (exponential backoff)
@@ -597,8 +597,14 @@ final class AppModel {
         case "msg", "query":
             if let n = rest.first { openDM(n, message: rest.dropFirst().joined(separator: " ")) }
         case "quit":
+            // The popover says this disconnects. It has to tell the server and
+            // stay offline — a local status line used to be the whole command.
+            guard !netID.isEmpty else { break }
+            let message = arg.trimmingCharacters(in: .whitespacesAndNewlines)
+            let shown = message.isEmpty ? "Leaving" : message
             appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server,
-                                                  text: "*** You have quit (\(arg.isEmpty ? "Leaving" : arg))"))
+                                                  text: "*** You have quit (\(shown))"))
+            disconnect(netID, quitMessage: shown)
         default:
             // Any other slash command (/mode, /kick, /invite, /away, /list, /who,
             // /names, /op, …) is sent through as a raw IRC command.
@@ -1172,7 +1178,7 @@ final class AppModel {
             guard let self else { return }
             if self.state(of: networkID) != .disconnected {
                 self.intentionalDisconnect.insert(networkID)   // suppress auto-reconnect for this drop
-                await self.hub.disconnect(networkID: networkID)
+                await self.hub.disconnect(networkID: networkID, quitMessage: "Leaving")
                 try? await Task.sleep(for: .seconds(0.5))
             }
             self.intentionalDisconnect.remove(networkID)
