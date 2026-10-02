@@ -23,6 +23,24 @@ final class IRCParserTests: XCTestCase {
         XCTAssertEqual(m?.tags["msgid"], "a b;c")
     }
 
+    /// `\\` is one escape. The character after it is literal, so `\\s` is a
+    /// backslash followed by s — the bug the old sequential replacements had.
+    func testTagEscapeIsOneLeftToRightPass() {
+        let slashS = IRCParser.parse("@msgid=a\\\\sb :x!y@z NOTICE * :ok")
+        XCTAssertEqual(slashS?.tags["msgid"], "a\\sb")
+
+        let slashColon = IRCParser.parse("@msgid=a\\\\:b :x!y@z NOTICE * :ok")
+        XCTAssertEqual(slashColon?.tags["msgid"], "a\\:b")
+
+        // Unrecognized \x keeps x. A trailing backslash is dropped. The space
+        // ends the tag value.
+        let other = IRCParser.parse("@msgid=a\\xb\\ :x!y@z NOTICE * :ok")
+        XCTAssertEqual(other?.tags["msgid"], "axb")
+
+        let breaks = IRCParser.parse("@msgid=a\\nb\\rc :x!y@z NOTICE * :ok")
+        XCTAssertEqual(breaks?.tags["msgid"], "a\nb\rc")
+    }
+
     func testNumericServerLine() {
         let m = IRCParser.parse(":server.name 001 mynick :Welcome to the network")
         XCTAssertEqual(m?.command, "001")

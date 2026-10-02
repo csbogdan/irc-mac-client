@@ -79,12 +79,32 @@ enum IRCParser {
         return msg.command.isEmpty ? nil : msg
     }
 
+    /// One left-to-right pass. A second sweep would treat the backslash that
+    /// `\\` just produced as the start of another escape, so `\\s` would
+    /// become a space instead of a backslash followed by `s`.
     private static func unescapeTagValue(_ v: String) -> String {
-        v.replacingOccurrences(of: "\\:", with: ";")
-         .replacingOccurrences(of: "\\s", with: " ")
-         .replacingOccurrences(of: "\\r", with: "\r")
-         .replacingOccurrences(of: "\\n", with: "\n")
-         .replacingOccurrences(of: "\\\\", with: "\\")
+        var out = String()
+        out.reserveCapacity(v.count)
+        var index = v.startIndex
+        while index < v.endIndex {
+            if v[index] != "\\" {
+                out.append(v[index])
+                index = v.index(after: index)
+                continue
+            }
+            let next = v.index(after: index)
+            guard next < v.endIndex else { break }   // a trailing "\" is dropped
+            switch v[next] {
+            case ":": out.append(";")
+            case "s": out.append(" ")
+            case "\\": out.append("\\")
+            case "r": out.append("\r")
+            case "n": out.append("\n")
+            default: out.append(v[next])             // unknown \X keeps X
+            }
+            index = v.index(after: next)
+        }
+        return out
     }
 
     // MARK: Serialization (client → server)
