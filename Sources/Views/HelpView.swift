@@ -322,6 +322,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             H("Everyday")
             Cmd("/join ⟨#room⟩", "enter a channel")
             Cmd("/part", "leave the current channel")
+            Cmd("/clear", "erase the scrollback in this window. Nothing is sent to the server.")
             Cmd("/msg ⟨name⟩ ⟨text⟩", "private message (also: /query)")
             Cmd("/me ⟨does something⟩", "action line")
             Cmd("/nick ⟨newname⟩", "change your nickname")

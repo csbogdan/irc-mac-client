@@ -596,6 +596,16 @@ final class AppModel {
             if let n = rest.first, isIgnored(n) { toggleIgnore(n) }
         case "msg", "query":
             if let n = rest.first { openDM(n, message: rest.dropFirst().joined(separator: " ")) }
+        case "clear":
+            // This window only. Nothing is sent, so a paste of several lines
+            // still can't wipe scrollback — submit() treats that as chat.
+            mutateConversation(selectedID) {
+                $0.messages.removeAll()
+                $0.unread = 0
+                $0.mentions = 0
+                $0.firstUnreadID = nil
+            }
+            updateDockBadge()
         case "quit":
             appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server,
                                                   text: "*** You have quit (\(arg.isEmpty ? "Leaving" : arg))"))
