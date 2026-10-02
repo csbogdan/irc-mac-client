@@ -49,10 +49,11 @@ final class IRCParserTests: XCTestCase {
             Message(id: "3", kind: .message, nick: "a", text: "hi"),
         ]
         let rows = MessageGrouper.rows(for: conv, selfNick: "me", searchQuery: nil)
-        // One coalesced event group + one message row.
-        XCTAssertEqual(rows.count, 2)
-        if case .events(_, _, let lines, _) = rows[0] {
+        // A day chip, one coalesced event group, then the message.
+        XCTAssertEqual(rows.count, 3)
+        if case .day = rows[0] {} else { XCTFail("expected a day chip first") }
+        if case .events(_, _, let lines, _) = rows[1] {
             XCTAssertEqual(lines.count, 2)
-        } else { XCTFail("expected event group first") }
+        } else { XCTFail("expected event group after the day chip") }
     }
 }

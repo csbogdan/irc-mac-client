@@ -35,6 +35,17 @@ struct MessageRowView: View, Equatable {
             }
             .padding(.horizontal, 16).padding(.vertical, 7)
 
+        case let .day(_, label):
+            HStack(spacing: 10) {
+                Rectangle().fill(Color.secondary.opacity(0.28)).frame(height: 1)
+                Text(label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Rectangle().fill(Color.secondary.opacity(0.28)).frame(height: 1)
+            }
+            .padding(.horizontal, 18).padding(.vertical, 8)
+
         case let .events(_, summary, lines, _):
             EventGroupView(summary: summary, lines: lines).padding(.leading, gutter + 18)
 
@@ -46,22 +57,36 @@ struct MessageRowView: View, Equatable {
              + Text(m.nick).foregroundStyle(NickColor.color(for: m.nick, dark: scheme == .dark))
              + Text(" \(m.text)").foregroundStyle(.secondary))
                 .font(.system(size: 14)).italic()
+                .textSelection(.enabled)
                 .padding(.leading, gutter + 18).padding(.trailing, 18).padding(.vertical, 3)
 
         case let .notice(m):
             (Text(m.nick).foregroundStyle(Theme.notice).fontWeight(.semibold)
              + Text("  \(m.text)").foregroundStyle(.secondary))
                 .font(.system(size: 13.5))
+                .textSelection(.enabled)
                 .padding(.leading, gutter + 18).padding(.trailing, 18).padding(.vertical, 3)
 
         case let .server(m):
             Text(m.text)
                 .font(.system(size: 12, design: .monospaced)).foregroundStyle(.tertiary)
+                .textSelection(.enabled)
                 .padding(.leading, gutter + 18).padding(.trailing, 18).padding(.vertical, 1)
         }
     }
 
     private var line: some View { Rectangle().fill(Theme.mention.opacity(0.45)).frame(height: 1) }
+
+    /// Right-click the name, not the message body. A menu on the text steals
+    /// the selection's Copy item.
+    @ViewBuilder private func messageMenu(nick: String, text: String) -> some View {
+        Button("Copy Message") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(RichText.plain(text), forType: .string)
+        }
+        Divider()
+        MemberActionsMenu(nick: nick)
+    }
 
     private func messageRow(_ m: Message, showHeader: Bool, isMention: Bool) -> some View {
         HStack(alignment: .top, spacing: 11) {
@@ -72,7 +97,7 @@ struct MessageRowView: View, Equatable {
                         .overlay(Text(NickColor.monogram(m.nick))
                             .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white))
                         .onTapGesture { model.revealMember(m.nick) }
-                        .contextMenu { MemberActionsMenu(nick: m.nick) }
+                        .contextMenu { messageMenu(nick: m.nick, text: m.text) }
                 } else { Color.clear }
             }
             .frame(width: Theme.avatarSize, height: Theme.avatarSize)
@@ -83,8 +108,9 @@ struct MessageRowView: View, Equatable {
                         // Click a nick → reveal in the member list; right-click
                         // → the same full menu as the member list.
                         Text(m.nick).font(.system(size: 13.5, weight: .semibold))
+                            .foregroundStyle(NickColor.color(for: m.nick, dark: scheme == .dark))
                             .onTapGesture { model.revealMember(m.nick) }
-                            .contextMenu { MemberActionsMenu(nick: m.nick) }
+                            .contextMenu { messageMenu(nick: m.nick, text: m.text) }
                             .help("Click to show in member list")
                         if showTimestamps {
                             Text(m.timeString).font(.system(size: 11)).foregroundStyle(.tertiary)
@@ -93,6 +119,8 @@ struct MessageRowView: View, Equatable {
                 }
                 Text(RichText.render(m.text, selfNick: model.selfNick, dark: scheme == .dark))
                     .font(.system(size: 14)).textSelection(.enabled)
+                    // No context menu on the text itself: it replaces the
+                    // selection's Copy command, so ⌘C copies nothing.
                 if let p = m.preview { PreviewCard(preview: p) }
             }
             Spacer(minLength: 0)
@@ -104,17 +132,6 @@ struct MessageRowView: View, Equatable {
                     Rectangle().fill(Theme.mention).frame(width: 3)
                     Theme.mention.opacity(scheme == .dark ? 0.13 : 0.07)
                 }
-            }
-        }
-        .contextMenu {
-            Button("Whois \(m.nick)") { model.whois(m.nick) }
-            Button("Message \(m.nick)") { model.openDM(m.nick) }
-            Button("Ban \(m.nick)…", role: .destructive) { model.banPrompt(m.nick) }
-            Menu("Send ASCII Art") { ArtMenu { model.sendArt($0, toNick: m.nick) } }
-            Divider()
-            Button("Copy Message") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(m.text, forType: .string)
             }
         }
         // Hover preview lives on the ROW, not the Text — .textSelection bridges

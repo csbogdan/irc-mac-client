@@ -41,6 +41,8 @@ final class AppModel {
     var joinFailure: JoinFailure?
     /// Set to a nick to highlight + scroll it in the member list (cleared there).
     var revealedMember: String?
+    /// Nick the composer should insert as `@nick ` at the caret, then clear.
+    var composerInsertion: String?
     @ObservationIgnored private var whoisTargetConvID: String?
     /// Nick the user explicitly asked for, per network — only such a rename is
     /// persisted back to the server config.
@@ -55,6 +57,8 @@ final class AppModel {
     @ObservationIgnored private var privateModeNetworks: Set<String> = []
     @ObservationIgnored private var pendingPrivateChannel: [String: String] = [:]
     @ObservationIgnored let notifier = NotificationManager()
+    /// Last time a mention chime played, so a burst collapses into one ping.
+    @ObservationIgnored private var lastChime: Date = .distantPast
 
     // Persisted server configurations — the durable records behind `networks`.
     var serverConfigs: [ServerConfig] = []
@@ -416,7 +420,27 @@ final class AppModel {
                           title: c.kind == .channel ? "\(c.name) — \(message.nick)" : message.nick,
                           body: RichText.plain(message.text))
         }
+        if incoming, isChat {
+            chimeIfAway(convID: convID, conversation: c, mention: mention)
+        }
         updateDockBadge()
+    }
+
+    /// One system ping when a mention or direct message lands somewhere you
+    /// aren't looking. Notification Center stays quiet while Relay is
+    /// frontmost; the chime covers that gap. Bursts share a single sound.
+    private func chimeIfAway(convID: String, conversation: Conversation, mention: Bool) {
+        let wantSound = UserDefaults.standard.object(forKey: "playMentionSound") as? Bool ?? true
+        guard wantSound, !conversation.isMuted else { return }
+        let relevant = conversation.kind == .directMessage
+            || (conversation.kind == .channel && mention)
+        guard relevant else { return }
+        let looking = convID == selectedID && (NSApp?.isActive ?? false)
+        guard !looking else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastChime) > 1.5 else { return }
+        lastChime = now
+        NSSound(named: NSSound.Name("Ping"))?.play()
     }
 
     /// Total unread across all conversations on the Dock icon (Settings toggle).
@@ -513,10 +537,17 @@ final class AppModel {
             inputHistory.append(text)
             if inputHistory.count > 100 { inputHistory.removeFirst() }
         }
-        if text.hasPrefix("/") { runCommand(text) }
-        else {
-            Task { await client.send(text: text, to: selectedID) }
-            echoOwn(text, kind: .message, to: selectedID)
+        let lines = OutgoingLines.lines(in: text)
+        // A single "/command" is a command. A paste of several lines is chat:
+        // one PRIVMSG per line, so a newline can't split the protocol stream
+        // and the send queue can pace them.
+        if lines.count == 1, let only = lines.first, only.hasPrefix("/") {
+            runCommand(only)
+            return
+        }
+        for line in lines {
+            Task { await client.send(text: line, to: selectedID) }
+            echoOwn(line, kind: .message, to: selectedID)
         }
     }
 
@@ -766,6 +797,18 @@ final class AppModel {
         guard let members = selectedConversation?.members else { return [] }
         return members.map(\.nick).filter { $0.lowercased().hasPrefix(q) }
             .sorted { $0.lowercased() < $1.lowercased() }
+    }
+
+    /// Nicks in the open conversation whose names start with `prefix`.
+    /// An empty prefix (the user just typed `@`) lists the first few, alphabetically.
+    func mentionMatches(prefix: String) -> [String] {
+        guard let members = selectedConversation?.members else { return [] }
+        let q = prefix.lowercased()
+        return members.map(\.nick)
+            .filter { q.isEmpty || $0.lowercased().hasPrefix(q) }
+            .sorted { $0.lowercased() < $1.lowercased() }
+            .prefix(8)
+            .map { $0 }
     }
 
     // MARK: - ASCII art

@@ -215,21 +215,26 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .talking: HelpPage {
             Bullet("Type and press Return to send. Shift+Return makes a new line without sending.")
             Bullet("/me waves → shows as \"✶ yourname waves\" — the classic action line.")
-            Bullet("Messages from the same person group together; the coloured circle shows who's talking.")
+            Bullet("Messages from the same person group together. Their name and the circle beside it share a colour, and so does an @name inside a message.")
             Bullet("A message that mentions you gets a blue edge marker and your name in a pill.")
+            Bullet("A date line — Today, Yesterday, or the calendar date — marks each new day in the scrollback.")
             Bullet("Old-style colour codes from other clients (mIRC colours) are rendered properly.")
             Bullet("Hover a message containing a link for a second — a small preview card pops up. Click it to open the page.")
             Bullet("Click a name in chat to find that person in the member list; right-click the name for the full member menu (message, op, kick, X, …).")
-            Bullet("Select text with the mouse and copy as usual; right-click a message for Copy Message and per-person actions.")
+            Bullet("Select text with the mouse — double-click a word — and copy with ⌘C. This works on messages, actions, notices, and the server console. Right-click a name for Copy Message and the member actions.")
             H("Finding things")
             Bullet("⌘F searches inside the current channel. Matching lines only; press the ✕ to go back.")
-            Bullet("At the bottom, the view follows new messages by itself. Scroll up and it stops; scroll back down (or hit Jump to latest) and it follows again.")
+            Bullet("At the bottom, the view follows new messages by itself. Scroll up and it stops; the button then counts how many arrived (\"3 new\"). Scroll back down, or hit that button, and it follows again.")
             Bullet("Switching conversations always lands you at the latest messages.")
             Bullet("A \"NEW MESSAGES\" line marks where you left off.")
         }
 
         case .composerTricks: HelpPage {
+            Bullet("Mentions: type @ and pick someone in the channel (arrow keys, then Return or Tab). Right-click a name → Mention does the same. The line is sent as @name, which is what highlights them.")
             Bullet("Tab completion: type the first letters of a name and press Tab. Press Tab again to cycle through everyone that matches. At the start of a line you get \"name: \", mid-sentence just the name.")
+            Bullet("⌘V pastes into the message box, including a multi-line paste. Nothing is sent until you press Return. ⌘C / ⌘X / ⌘A work in the box as well.")
+            Bullet("Return on a multi-line draft sends each line as its own message, paced so the server doesn't disconnect you. A single line that starts with / is still a command.")
+            Bullet("The smiley button inserts an emoji at the cursor. More Characters opens the macOS character viewer.")
             Bullet("The same works for channels: type #mu + Tab.")
             Bullet("↑ and ↓ recall everything you've sent this session — walk up through history, edit, resend. Whatever you were typing is kept and comes back when you walk down past the newest entry.")
             Bullet("Type / to open the command list with argument hints — arrow keys or Tab pick one.")
@@ -250,10 +255,11 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 
         case .notifications: HelpPage {
             H("What notifies")
-            P("When Relay is in the background, two things reach Notification Center: someone saying your name in a channel, and any private message. Clicking a notification brings you straight to that conversation. While you're actively using Relay, nothing pops — the sidebar badges cover it.")
+            P("When Relay is in the background, two things reach Notification Center: someone saying your name in a channel, and any private message. Clicking a notification brings you straight to that conversation. While you're actively using Relay, nothing pops — the sidebar badges cover it. A short sound still plays if that chat isn't the one you're looking at.")
             H("The switches (Settings → Notifications)")
             Field("Notify on mentions", "channel messages that contain your name or a keyword.")
             Field("Notify on direct messages", "private messages.")
+            Field("Play a sound for mentions and messages", "a ping for those same two cases, when you aren't already reading that chat. Turn it off for silence.")
             Field("Show unread count on Dock icon", "the little number on the Dock.")
             H("Highlight keywords")
             P("Add words like \"deploy\" or your project's name — messages containing them count as mentions: red badge, highlight, notification. Your nickname always counts.")

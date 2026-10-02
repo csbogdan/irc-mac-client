@@ -5,6 +5,12 @@ struct ConversationView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     @State private var atBottom = true
+    /// Messages that arrived while the reader was scrolled up. Reset when
+    /// they come back to the latest line.
+    @State private var arrivedWhileUp = 0
+    /// Which conversation `arrivedWhileUp` belongs to, so switching channels
+    /// doesn't treat the new buffer's length as a burst of new messages.
+    @State private var countedForID = ""
     @State private var editingTopic = false
     @State private var topicDraft = ""
     @State private var rows: [MessageRow] = []
@@ -124,14 +130,15 @@ struct ConversationView: View {
             .id(model.selectedID)
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .contentShape(Rectangle())
-            .onTapGesture(count: 2) {
-                if conv?.kind == .channel { model.channelModesOpen = true }
-            }
             .overlay(alignment: .bottomTrailing) {
                 if !atBottom {
-                    Button { atBottom = true; jumpToBottom(proxy) } label: {
-                        Label("Jump to latest", systemImage: "arrow.down")
+                    let title = arrivedWhileUp > 0 ? "\(arrivedWhileUp) new" : "Jump to latest"
+                    Button {
+                        arrivedWhileUp = 0
+                        atBottom = true
+                        jumpToBottom(proxy)
+                    } label: {
+                        Label(title, systemImage: "arrow.down")
                             .font(.system(size: 12, weight: .medium))
                             .padding(.horizontal, 12).padding(.vertical, 7)
                     }
@@ -142,6 +149,8 @@ struct ConversationView: View {
             }
             .onAppear {
                 atBottom = true
+                arrivedWhileUp = 0
+                countedForID = model.selectedID
                 jumpToBottom(proxy)
             }
             .onChange(of: rows.last?.id) { _, _ in
@@ -149,12 +158,26 @@ struct ConversationView: View {
                 // messages.count fired before the cached rows updated, which
                 // left follow perpetually one message behind.
                 guard atBottom else { return }
+                arrivedWhileUp = 0
                 // No animation — animated scrolls pile up during floods.
                 Task { @MainActor in proxy.scrollTo("BOTTOM", anchor: .bottom) }
             }
-            .onChange(of: model.selectedID) { _, _ in
+            .onChange(of: conv?.messages.count) { old, new in
+                let id = model.selectedID
+                guard countedForID == id, let old, let new, new > old, !atBottom else {
+                    countedForID = id
+                    return
+                }
+                arrivedWhileUp += new - old
+            }
+            .onChange(of: atBottom) { _, atBottom in
+                if atBottom { arrivedWhileUp = 0 }
+            }
+            .onChange(of: model.selectedID) { _, id in
                 // Switching always lands at the latest messages. Always.
                 atBottom = true
+                arrivedWhileUp = 0
+                countedForID = id
                 jumpToBottom(proxy)
             }
         }
@@ -176,7 +199,7 @@ struct ConversationView: View {
     /// Re-grouping the whole scrollback on every unrelated model update (e.g.
     /// traffic arriving in *other* channels) made busy sessions laggy.
     private var rowsKey: String {
-        "\(model.selectedID)|\(conv?.messages.count ?? 0)|\(conv?.firstUnreadID ?? "")|\(model.searchOpen ? model.searchText : "")"
+        "\(model.selectedID)|\(conv?.messages.count ?? 0)|\(conv?.firstUnreadID ?? "")|\(model.searchOpen ? model.searchText : "")|\(DayChip.key(for: Date()))"
     }
 
     private func computeRows() -> [MessageRow] {

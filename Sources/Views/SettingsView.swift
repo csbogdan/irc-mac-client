@@ -346,6 +346,7 @@ private struct NotificationsSettings: View {
     @AppStorage("notifyMentions") private var notifyMentions = true
     @AppStorage("notifyDMs") private var notifyDMs = true
     @AppStorage("dockBadge") private var dockBadge = true
+    @AppStorage("playMentionSound") private var playMentionSound = true
     @State private var newKeyword = ""
 
     var body: some View {
@@ -354,6 +355,7 @@ private struct NotificationsSettings: View {
             Section {
                 Toggle("Notify on mentions", isOn: $notifyMentions)
                 Toggle("Notify on direct messages", isOn: $notifyDMs)
+                Toggle("Play a sound for mentions and messages", isOn: $playMentionSound)
                 Toggle("Show unread count on Dock icon", isOn: $dockBadge)
             }
             Section {

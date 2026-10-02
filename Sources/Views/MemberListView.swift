@@ -77,6 +77,7 @@ struct MemberActionsMenu: View {
     let nick: String
 
     var body: some View {
+        Button("Mention @\(nick)") { model.composerInsertion = nick }
         Button("Whois \(nick)") { model.whois(nick) }
         Button("Message \(nick)") { model.openDM(nick) }
         Menu("Send ASCII Art") { ArtMenu { model.sendArt($0, toNick: nick) } }

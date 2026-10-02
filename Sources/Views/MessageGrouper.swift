@@ -9,6 +9,7 @@ import Foundation
 // scrollback — O(rows) layout per message, sluggish by a few hundred lines.
 enum MessageRow: Identifiable, Equatable {
     case divider(id: String)
+    case day(id: String, label: String)
     case events(id: String, summary: String, lines: [String], group: [Message])
     case message(Message, showHeader: Bool, isMention: Bool)
     case action(Message)
@@ -18,6 +19,7 @@ enum MessageRow: Identifiable, Equatable {
     var id: String {
         switch self {
         case .divider(let id): return "div-\(id)"
+        case .day(let id, _): return "day-\(id)"
         case .events(let id, _, _, _): return "evt-\(id)"
         case .message(let m, _, _): return m.id
         case .action(let m): return m.id
@@ -29,7 +31,8 @@ enum MessageRow: Identifiable, Equatable {
 
 enum MessageGrouper {
 
-    static func rows(for conv: Conversation, selfNick: String, keywords: [String] = [], searchQuery: String?) -> [MessageRow] {
+    static func rows(for conv: Conversation, selfNick: String, keywords: [String] = [], searchQuery: String?,
+                     now: Date = .now, calendar: Calendar = .current) -> [MessageRow] {
         // ONE compiled regex for the whole pass. range(of:.regularExpression)
         // recompiled the pattern per message per word — at the 2000-message
         // scrollback cap that meant thousands of regex compiles on the main
@@ -47,6 +50,15 @@ enum MessageGrouper {
         var rows: [MessageRow] = []
         var eventBuffer: [Message] = []
         var previousNick: String?
+        var lastDayKey: String?
+
+        func noteDay(_ date: Date, id: String) {
+            let key = DayChip.key(for: date, calendar: calendar)
+            guard key != lastDayKey else { return }
+            lastDayKey = key
+            rows.append(.day(id: id, label: DayChip.label(for: date, now: now, calendar: calendar)))
+            previousNick = nil
+        }
 
         func flushEvents() {
             guard !eventBuffer.isEmpty else { return }
@@ -77,12 +89,19 @@ enum MessageGrouper {
 
         for m in conv.messages {
             if m.isJoinPartQuit {
-                if q == nil { eventBuffer.append(m) }   // hide join/part while searching
+                if q == nil {
+                    let key = DayChip.key(for: m.timestamp, calendar: calendar)
+                    if !eventBuffer.isEmpty, key != lastDayKey { flushEvents() }
+                    noteDay(m.timestamp, id: m.id)
+                    eventBuffer.append(m)
+                }
                 continue
             }
             flushEvents()
 
             if let q, !m.text.lowercased().contains(q) { continue }
+
+            noteDay(m.timestamp, id: m.id)
 
             if conv.firstUnreadID == m.id, conv.kind != .server, q == nil {
                 rows.append(.divider(id: m.id))

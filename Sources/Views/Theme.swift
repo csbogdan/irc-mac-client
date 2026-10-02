@@ -90,6 +90,16 @@ enum RichText {
                                                 : Color(red: 0.04, green: 0.44, blue: 0.84)
             attr[range].underlineStyle = .single
         }
+        // @nick tokens pick up that person's colour. Skip anything already a
+        // link (an @ inside a URL) and let the self-mention pill win after.
+        for range in MentionSpans.ranges(in: plain) {
+            let nsRange = NSRange(range, in: plain)
+            guard let slice = Range(nsRange, in: attr) else { continue }
+            if attr[slice].runs.contains(where: { $0.link != nil }) { continue }
+            let nick = String(plain[range].dropFirst())
+            attr[slice].foregroundColor = NickColor.color(for: nick, dark: dark)
+            attr[slice].font = .system(size: 14, weight: .semibold)
+        }
         // Self-mention pill
         if !selfNick.isEmpty, let r = attr.range(of: selfNick, options: .caseInsensitive) {
             attr[r].backgroundColor = Theme.mention
