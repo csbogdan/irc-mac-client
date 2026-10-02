@@ -32,6 +32,8 @@ actor LiveIRCClient: IRCClient {
     /// The configured nick, kept current by the hub as settings change.
     private var configNick: String
     private var registered = false
+    /// Capability names gathered across a multiline CAP LS (302).
+    private var offeredCaps: [String] = []
     private var namesBuffer: [String: [Member]] = [:]   // channel → names accumulated across 353s
     private var banBuffer: [String: [String]] = [:]     // channel → ban masks accumulated across 367s
     private var listBuffer: [ChannelListItem] = []      // accumulated /list results
@@ -137,6 +139,7 @@ actor LiveIRCClient: IRCClient {
         sendPump?.cancel()
         sendTimer = .distantPast
         namesBuffer.removeAll(); banBuffer.removeAll(); listBuffer.removeAll()
+        offeredCaps.removeAll()
         isupport.removeAll(); chanTypes = "#&"
 
         emit(.stateChanged(networkID: networkID, .connecting))
@@ -647,18 +650,25 @@ actor LiveIRCClient: IRCClient {
     // MARK: CAP / SASL negotiation
 
     private func handleCAP(_ msg: IRCMessage) {
-        // :server CAP * <subcommand> :<caps>
+        // :server CAP <target> <subcommand> [*] :<caps>
+        // 302 advertises `sasl=PLAIN,EXTERNAL`, often split across lines whose
+        // third parameter is `*`. Ending on the first line drops SASL whenever
+        // the token sits on a later line — which is the common case.
         let sub = msg.params.count >= 2 ? msg.params[1].uppercased() : ""
-        let caps = msg.trailing ?? ""
+        let names = IRCParser.capabilityNames(IRCParser.capListArgument(msg))
         switch sub {
         case "LS":
-            if saslEnabled, caps.split(separator: " ").contains("sasl") {
+            offeredCaps.append(contentsOf: names)
+            guard !IRCParser.capListIsContinued(msg) else { return }
+            let offered = Set(offeredCaps)
+            offeredCaps.removeAll()
+            if saslEnabled, offered.contains("sasl") {
                 rawSend(IRCParser.serialize(command: "CAP", params: ["REQ", "sasl"]))
             } else {
                 rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))
             }
         case "ACK":
-            if caps.contains("sasl") {
+            if names.contains("sasl") {
                 rawSend(IRCParser.serialize(command: "AUTHENTICATE", params: ["PLAIN"]))
             } else {
                 rawSend(IRCParser.serialize(command: "CAP", params: ["END"]))

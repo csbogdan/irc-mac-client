@@ -87,6 +87,33 @@ enum IRCParser {
          .replacingOccurrences(of: "\\\\", with: "\\")
     }
 
+    /// Names from one CAP LS/LIST argument.
+    ///
+    /// CAP 302 appends a value (`sasl=PLAIN,EXTERNAL`). The name is the text
+    /// before the first `=`. A bare 301 token (`sasl`) is unchanged.
+    static func capabilityNames(_ list: String) -> [String] {
+        list.split(separator: " ", omittingEmptySubsequences: true).compactMap { token in
+            let name = token.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false).first
+            guard let name, !name.isEmpty else { return nil }
+            return String(name)
+        }
+    }
+
+    /// The capability list on `CAP <target> <sub> [*] :<caps>`.
+    /// The `*` is a continuation marker, not part of the list.
+    static func capListArgument(_ msg: IRCMessage) -> String {
+        guard msg.params.count >= 3 else { return "" }
+        if msg.params[2] == "*" {
+            return msg.params.count >= 4 ? (msg.params.last ?? "") : ""
+        }
+        return msg.params.last ?? ""
+    }
+
+    /// True for a multiline CAP LS/LIST line: `CAP <target> LS * :<caps>`.
+    static func capListIsContinued(_ msg: IRCMessage) -> Bool {
+        msg.params.count >= 4 && msg.params[2] == "*"
+    }
+
     // MARK: Serialization (client → server)
 
     static func serialize(command: String, params: [String], tags: [String: String] = [:]) -> String {
