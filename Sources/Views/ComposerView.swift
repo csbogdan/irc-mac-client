@@ -26,6 +26,7 @@ struct ComposerView: View {
         .init(cmd: "part", args: "", desc: "Leave the current channel"),
         .init(cmd: "cycle", args: "[#channel]", desc: "Leave and re-join (keeps the window)"),
         .init(cmd: "quit", args: "<message>", desc: "Disconnect from the server"),
+        .init(cmd: "notice", args: "<target> <text>", desc: "Send a notice"),
     ]
 
     private var slashOpen: Bool { draft.hasPrefix("/") && !draft.contains(" ") }

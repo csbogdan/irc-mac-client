@@ -596,6 +596,22 @@ final class AppModel {
             if let n = rest.first, isIgnored(n) { toggleIgnore(n) }
         case "msg", "query":
             if let n = rest.first { openDM(n, message: rest.dropFirst().joined(separator: " ")) }
+        case "notice":
+            // The default path already sends this as a raw line, which prints
+            // ">> NOTICE …" and never a notice row. IRC does not echo it back.
+            guard rest.count >= 2, !netID.isEmpty else { break }
+            let target = rest[0]
+            let text = rest.dropFirst().joined(separator: " ")
+                .components(separatedBy: .newlines)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+            guard !text.isEmpty else { break }
+            Task { await client.sendRaw("NOTICE \(target) :\(text)", networkID: netID) }
+            echoOwn(text, kind: .notice, to: selectedID)
+            let convID = canonicalConvID("\(netID)/\(target)")
+            if convID != selectedID, conversations[convID] != nil {
+                echoOwn(text, kind: .notice, to: convID)
+            }
         case "quit":
             appendMessage(to: selectedID, Message(id: UUID().uuidString, kind: .server,
                                                   text: "*** You have quit (\(arg.isEmpty ? "Leaving" : arg))"))

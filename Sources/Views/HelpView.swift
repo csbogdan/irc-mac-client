@@ -323,6 +323,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Cmd("/join ⟨#room⟩", "enter a channel")
             Cmd("/part", "leave the current channel")
             Cmd("/msg ⟨name⟩ ⟨text⟩", "private message (also: /query)")
+            Cmd("/notice ⟨name⟩ ⟨text⟩", "send a notice. It shows in the window you typed it in, and also in that person's or channel's window when it is already open.")
             Cmd("/me ⟨does something⟩", "action line")
             Cmd("/nick ⟨newname⟩", "change your nickname")
             Cmd("/whois ⟨name⟩", "who is this person — includes idle time & away")
